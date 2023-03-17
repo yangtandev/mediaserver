@@ -1,0 +1,27 @@
+{
+    "name": "rtsp-api",
+    "version": "1.0.0",
+    "description": "",
+    "main": "rtsp-api.js",
+    "scripts": {
+        "start": "nodemon ./rtsp-stream-api6.js ",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "express": "^4.17.1",
+        "express-ws": "^4.0.0",
+        "fluent-ffmpeg": "^2.1.2",
+        "websocket-stream": "^5.5.2"
+    },
+    "dependencies": {
+        "ip": "^1.1.8",
+        "nodemon": "^2.0.20"
+    },
+    "bin": "rtsp-stream-api.js",
+    "optionalDependencies": {
+        "bufferutil": "^4.0.6",
+        "utf-8-validate": "^5.0.9"
+    }
+}
