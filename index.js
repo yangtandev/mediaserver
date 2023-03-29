@@ -16,7 +16,7 @@ const isExternalIp = false
 const localhost = isExternalIp
     ? require('child_process').execSync(`curl -s http://checkip.amazonaws.com || printf "0.0.0.0"`).toString().trim()
     : require('ip').address()
-const port = 443
+const port = 445
 const segmentInSeconds = 300 // 每 5 分鐘擷取一次錄影片段
 
 const RTSPCommands = {}
@@ -26,11 +26,31 @@ function RTSPToRTSP(rtsp, type) {
     const output = `rtsp://${localhost}:9554/live/${rtsp.split('@').pop()}`
     const command = getCommand(rtsp)
 
+    Object.keys(RTSPCommands).forEach((RTSPCommand) => {
+        const oldCommand = RTSPCommand.split('_').slice(1, 2).join('')
+        const newCommand = command.split('_').slice(1, 2).join('')
+        if (oldCommand == newCommand) {
+            RTSPCommands[RTSPCommand].kill()
+            delete RTSPCommands[RTSPCommand]
+        }
+    })
+
     RTSPCommands[command] = ffmpeg(rtsp)
 
     if (type == 'h264') {
         RTSPCommands[command]
-            .addInputOption('-rtsp_transport', 'tcp', '-re')
+            .addInputOption(
+                '-flags',
+                'low_delay',
+                // '-fflags',
+                // 'nobuffer',
+                '-rtsp_transport',
+                'tcp',
+                '-re',
+                '-vsync',
+                0,
+                '-y'
+            )
             .addOutputOption(
                 '-fps_mode',
                 'passthrough',
@@ -53,7 +73,6 @@ function RTSPToRTSP(rtsp, type) {
                     .join(' ')
 
                 if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
-                    RTSPCommands[command].kill()
                     RTSPToRTSP(rtsp, type)
                 }
             })
@@ -64,12 +83,8 @@ function RTSPToRTSP(rtsp, type) {
                 }
                 err = err.message.split(' ').slice(-3, -2).pop()
                 if (err == '404') {
-                    RTSPCommands[command].kill()
-                    // RTSPToRTSP(rtsp, type)
+                    RTSPToRTSP(rtsp, type)
                 }
-                // if (err.message == 'ffmpeg was killed with signal SIGKILL') {
-                //     RTSPToRTSP(rtsp, type)
-                // }
             })
             .on('end', function () {
                 delete RTSPCommands[command]
@@ -78,8 +93,10 @@ function RTSPToRTSP(rtsp, type) {
     } else if (type == 'h265') {
         RTSPCommands[command]
             .addInputOption(
-                '-fflags',
-                '+igndts',
+                '-flags',
+                'low_delay',
+                // '-fflags',
+                // 'nobuffer',
                 '-rtsp_transport',
                 'tcp',
                 '-re',
@@ -88,11 +105,14 @@ function RTSPToRTSP(rtsp, type) {
                 '-hwaccel_output_format',
                 'cuda',
                 '-c:v',
-                'hevc_cuvid'
+                'hevc_cuvid',
+                '-vsync',
+                0,
+                '-y'
             )
             .addOutputOption(
-                '-fps_mode',
-                'passthrough',
+                // '-fps_mode',
+                // 'passthrough',
                 '-rtsp_transport',
                 'tcp',
                 '-preset',
@@ -112,7 +132,6 @@ function RTSPToRTSP(rtsp, type) {
                     .join(' ')
 
                 if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
-                    RTSPCommands[command].kill()
                     RTSPToRTSP(rtsp, type)
                 }
             })
@@ -123,12 +142,8 @@ function RTSPToRTSP(rtsp, type) {
                 }
                 err = err.message.split(' ').slice(-3, -2).pop()
                 if (err == '404') {
-                    RTSPCommands[command].kill()
-                    // RTSPToRTSP(rtsp, type)
+                    RTSPToRTSP(rtsp, type)
                 }
-                // if (err.message == 'ffmpeg was killed with signal SIGKILL') {
-                //     RTSPToRTSP(rtsp, type)
-                // }
             })
             .on('end', function () {
                 delete RTSPCommands[command]
@@ -137,7 +152,7 @@ function RTSPToRTSP(rtsp, type) {
     }
 }
 
-function MP4ToMP4(rtsp) {
+function MP4ToMP4(rtsp, is404 = false) {
     const mp4 = `http://${localhost}:9080/live/${rtsp.split('@').pop()}.live.mp4`
     const ip = rtsp.split('@').pop().replace(/\:+/g, '_')
     const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
@@ -159,9 +174,22 @@ function MP4ToMP4(rtsp) {
         }
     }
     const command = getCommand(rtsp)
+
+    if (is404) {
+        Object.keys(MP4Commands).forEach((MP4Command) => {
+            const oldCommand = MP4Command.split('_').slice(1, 2).join('')
+            const newCommand = command.split('_').slice(1, 2).join('')
+            if (oldCommand == newCommand) {
+                MP4Commands[MP4Command].kill()
+                delete MP4Commands[MP4Command]
+            }
+        })
+    }
+
     MP4Commands[command] = ffmpeg(mp4)
+
     MP4Commands[command]
-        .addOutputOption('-fflags', '+igndts', '-preset', 'medium', '-movflags', 'faststart', '-t', segmentInSeconds)
+        .addOutputOption('-preset', 'medium', '-movflags', 'faststart', '-t', segmentInSeconds)
         .outputFormat('mp4')
         .videoCodec('copy')
         .noAudio()
@@ -173,8 +201,7 @@ function MP4ToMP4(rtsp) {
                 .join(' ')
 
             if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
-                MP4Commands[command].kill()
-                MP4ToMP4(rtsp)
+                MP4ToMP4(rtsp, true)
             }
         })
         .on('error', function (err, stdout, stderr) {
@@ -182,13 +209,9 @@ function MP4ToMP4(rtsp) {
             if (err.message == 'Output stream closed') {
                 MP4Commands[command].kill()
             }
-            err = err.message.split(' ').slice(-3, -2).pop()
-            if (err == '404') {
-                MP4Commands[command].kill()
-                // MP4ToMP4(rtsp)
-            }
-            // if (err.message == 'ffmpeg was killed with signal SIGKILL') {
-            //     MP4ToMP4(rtsp)
+            // err = err.message.split(' ').slice(-3, -2).pop()
+            // if (err == '404') {
+            //     MP4ToMP4(rtsp, true)
             // }
         })
         .on('end', function () {
@@ -213,52 +236,69 @@ function getCommand(rtsp) {
 app.use(express.static(__dirname))
 
 app.get('/', (req, res) => {
-    let videoElements = ''
+    let containers = ''
 
     rtsps.forEach((rtsp, index) => {
-        videoElements += `<video id="video${index}" controls autoplay muted></video>`
+        containers += `<div id="container${index}"></div>`
     })
 
     res.send(` 
-    <script src="./lib/flvExtend.js" charset="utf-8"></script>
-    <script src="./lib/reconnecting-websocket.js" charset="utf-8"></script>
-    ${videoElements}
+    <style type="text/css" scoped>
+        body{
+            margin: 0
+        }
+        body::-webkit-scrollbar {
+            display: none;
+        }
+        .grid {
+            display:grid;
+            grid-template-columns: auto auto auto;
+            height: 100vh;
+        }
+    </style>
+    <script src="./lib/jessibuca-pro.js"></script>
+    <div class="grid">
+        ${containers}
+    </div>
     <script>  
-        function init(url, element){
-            const flv = new FlvExtend({ 
-                element: element, 
-                frameTracking: true, // 追幀設置
-                updateOnStart: true, // 點擊播放按鈕後實時更新視頻
-                updateOnFocus: true, // 回到前台後實時更新 
-                reconnect: true, // 斷流後重連
-                reconnectInterval: 0, // 重連間隔(ms)
-                trackingDelta: 2, // 追幀最大延遲
-            })
-              
-            const player = flv.init(  
-                {
-                    type: 'flv',  
-                    url: url,  
-                    isLive: true,
-                    hasAudio: false,
-                    withCredentials: false, 
-                },
-                {
-                    enableStashBuffer: false, // 是否啟用IO隱藏緩衝區。如果您需要實時（最小延遲）來進行實時流播放，則設置為false
-                    autoCleanupSourceBuffer: true, // 對SourceBuffer進行自動清理
-                    stashInitialSize: 128 // 減少首幀顯示等待時長
+        function create(url, id) {
+            const ip = url.split('/').pop().split('.').slice(0,-2).join('.')
+            const $container = document.getElementById('container' + id);
+            const playList = [];
+            const player = new JessibucaPro({
+                decoder:'/lib/decoder-pro.js',
+                container: $container,
+                videoBuffer: 0.1, 
+                isResize: true,
+                hasAudio: false,
+                isFlv: true,
+                loadingText: "",
+                debug: false,
+                showBandwidth: false, 
+                loadingTimeoutReplayTimes:-1,
+                heartTimeoutReplayTimes:-1, 
+                autoWasm:true,
+                operateBtns: {
+                    fullscreen: false,
+                    screenshot: false,
+                    play: false,
+                    audio: false,
                 }
-            )
-           
-            setInterval(()=> player.rebuild(), 1000*60*60) // rebuild player every hour
-        } 
+            },);
+
+            player.on('pause', function () {
+                player.play()   
+            });
+
+            player && player.play(url)
+
+            playList.push(player);
+        }
 
         const urls = [${rtsps.map((rtsp) => `'wss://stream.ginibio.com/live/${rtsp.split('@').pop()}.live.flv'`)}]
 
-        urls.forEach((url, index)=>{  
-            const element = document.getElementById(\`video\${index}\`)
-            
-            init(url, element) 
+        urls.forEach((url, id)=>{  
+            create(url, id) 
         })
         
         setInterval(()=>console.clear(),1000*60*5) // clear logs every 5 minutes
@@ -295,18 +335,6 @@ server.listen(port, () => {
                 .join('')
 
             const rtsp = rtsps.filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == ip).join(' ')
-
-            Object.keys(RTSPCommands).forEach((command) => {
-                if (command.split('_').slice(1, 2) == ip) {
-                    RTSPCommands[command].kill()
-                }
-            })
-
-            Object.keys(MP4Commands).forEach((command) => {
-                if (command.split('_').slice(1, 2) == ip) {
-                    MP4Commands[command].kill()
-                }
-            })
 
             if (h264_rtsps.includes(rtsp)) {
                 RTSPToRTSP(rtsp, 'h264')
@@ -366,7 +394,16 @@ server.listen(port, () => {
 
 process.on('exit', (code) => {
     console.log('exit')
-    spawn(`killall ffmpeg MediaServer`, {
+    server.close()
+    spawn('kill -s 9 `pgrep ffmpeg` && kill -s 9 `pgrep MediaServer`', {
         shell: true,
     })
 })
+
+// process.on('SIGINT', (code) => {
+//     console.log('SIGINT')
+//     server.close()
+//     spawn(`killall ffmpeg MediaServer`, {
+//         shell: true,
+//     })
+// })
