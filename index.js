@@ -10,13 +10,14 @@ const options = {
     cert: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/fullchain.pem`, 'utf8'),
 }
 const express = require('express')
+const { log } = require('console')
 const app = express()
 const server = https.createServer(options, app)
 const isExternalIp = false
 const localhost = isExternalIp
     ? require('child_process').execSync(`curl -s http://checkip.amazonaws.com || printf "0.0.0.0"`).toString().trim()
     : require('ip').address()
-const port = 445
+const port = 443
 const segmentInSeconds = 300 // 每 5 分鐘擷取一次錄影片段
 const RTSPCommands = {}
 const MP4Commands = {}
@@ -74,7 +75,10 @@ function RTSPToRTSP(rtsp, type) {
                     .slice(-3, err.length - 1)
                     .join(' ')
 
-                if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
+                if (
+                    err == 'muxing overhead: unknown'
+                    // || err == '404 Not Found'
+                ) {
                     RTSPToRTSP(rtsp, type)
                 }
             })
@@ -83,6 +87,10 @@ function RTSPToRTSP(rtsp, type) {
                 // if (err.message == 'Output stream closed') {
                 //     RTSPCommands[command].kill()
                 // }
+                err = err.message.split(' ').slice(-2).join(' ')
+                if (err == 'Conversion failed!') {
+                    RTSPToRTSP(rtsp, type)
+                }
                 // err = err.message.split(' ').slice(-3, -2).pop()
                 // if (err == '404') {
                 //     RTSPToRTSP(rtsp, type)
@@ -133,7 +141,10 @@ function RTSPToRTSP(rtsp, type) {
                     .slice(-3, err.length - 1)
                     .join(' ')
 
-                if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
+                if (
+                    err == 'muxing overhead: unknown'
+                    // || err == '404 Not Found'
+                ) {
                     RTSPToRTSP(rtsp, type)
                 }
             })
@@ -205,7 +216,10 @@ function MP4ToMP4(rtsp, is404 = false) {
                 .slice(-3, err.length - 1)
                 .join(' ')
 
-            if (err == 'muxing overhead: unknown' || err == '404 Not Found') {
+            if (
+                err == 'muxing overhead: unknown'
+                // || err == '404 Not Found'
+            ) {
                 MP4ToMP4(rtsp, true)
             }
         })
@@ -258,9 +272,10 @@ function runMediaServer() {
 
         // RTSP 斷訊重連
         if (err == 'RtspSession.cpp:67') {
+            console.log('ip', data.split(' '))
             const ip = data
                 .split(' ')
-                .slice(11, 12)
+                .filter((str) => str.includes('__defaultVhost__'))
                 .join(' ')
                 .replace(/\)+/g, '/')
                 .split('/')
@@ -268,7 +283,6 @@ function runMediaServer() {
                 .join(' ')
                 .match(/\d/g)
                 .join('')
-
             const rtsp = rtsps.filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == ip).join(' ')
 
             if (h264_rtsps.includes(rtsp)) {
@@ -292,6 +306,16 @@ function runMediaServer() {
             RTSPToRTSP(rtsp, 'h265')
         })
     }
+
+    // 每小時自動重啟 Media Server，校正累積延遲。
+    setTimeout(() => {
+        const killMediaServer = spawn('kill -s 9 `pgrep MediaServer`', {
+            shell: true,
+        })
+        killMediaServer.on('close', (code) => {
+            runMediaServer()
+        })
+    }, 1000 * 60 * 60)
 }
 
 /*  
@@ -383,7 +407,6 @@ app.get('/', (req, res) => {
         function create(url, id) {
             const ip = url.split('/').pop().split('.').slice(0,-2).join('.')
             const $container = document.getElementById('container' + id);
-            const playList = [];
             const player = new JessibucaPro({
                 decoder:'/lib/decoder-pro.js',
                 container: $container,
@@ -412,9 +435,25 @@ app.get('/', (req, res) => {
                 player.play()   
             });
 
-            player && player.play(url)
+            player.on("error", function (error) {
+                if (error === player.ERROR.playError ) {
+                    console.log('playError :',ip, error)
+                } else if (error === player.ERROR.fetchError ) {
+                    console.log('fetchError :',ip, error)
+                }else if (error === player.ERROR.websocketError) {
+                    console.log('websocketError:',ip, error)
+                }else if (error === player.ERROR.webcodecsH265NotSupport) {
+                    console.log('webcodecsH265NotSupport:',ip, error)
+                }else if (error === player.ERROR.mediaSourceH265NotSupport) {
+                    console.log('mediaSourceH265NotSupport:',ip, error)
+                }else if (error === player.ERROR.wasmDecodeError ) {
+                    console.log('wasmDecodeError :',ip, error)
+                }else{
+                    console.log('elseError :',ip, error)
+                }
+            })
 
-            playList.push(player);
+            player && player.play(url)
         }
 
         const urls = [${rtsps.map((rtsp) => `'wss://stream.ginibio.com/live/${rtsp.split('@').pop()}.live.flv'`)}]
@@ -423,7 +462,7 @@ app.get('/', (req, res) => {
             create(url, id) 
         })
         
-        setInterval(()=>console.clear(),1000*60*5) // clear logs every 5 minutes
+        // setInterval(()=>console.clear(),1000*60*5) // clear logs every 5 minutes
     </script> 
 `)
 })
