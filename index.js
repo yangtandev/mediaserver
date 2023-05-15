@@ -10,17 +10,17 @@ const options = {
     cert: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/fullchain.pem`, 'utf8'),
 }
 const express = require('express')
-const { log } = require('console')
 const app = express()
 const server = https.createServer(options, app)
 const isExternalIp = false
 const localhost = isExternalIp
     ? require('child_process').execSync(`curl -s http://checkip.amazonaws.com || printf "0.0.0.0"`).toString().trim()
     : require('ip').address()
-const port = 443
+const port = 445
 const segmentInSeconds = 300 // 每 5 分鐘擷取一次錄影片段
 const RTSPCommands = {}
 const MP4Commands = {}
+const backupPath = '/home/gini-nvr/Videos'
 
 /* 
     將原始 RTSP 串流轉換成 Media Server 可接受格式。
@@ -45,13 +45,10 @@ function RTSPToRTSP(rtsp, type) {
             .addInputOption(
                 '-flags',
                 'low_delay',
-                // '-fflags',
-                // 'nobuffer',
                 '-rtsp_transport',
                 'tcp',
                 '-re',
-                '-vsync',
-                0,
+                // '-vsync', 0,
                 '-y'
             )
             .addOutputOption(
@@ -69,32 +66,25 @@ function RTSPToRTSP(rtsp, type) {
             .videoCodec('copy')
             .noAudio()
             .on('stderr', function (err) {
-                // console.log(rtsp.split('@').pop(),'rtsp', err)
-                err = err
-                    .split(' ')
-                    .slice(-3, err.length - 1)
-                    .join(' ')
-
-                if (
-                    err == 'muxing overhead: unknown'
-                    // || err == '404 Not Found'
-                ) {
+                if (err.includes('muxing overhead: unknown')) {
                     RTSPToRTSP(rtsp, type)
                 }
             })
             .on('error', function (err, stdout, stderr) {
-                console.log(rtsp.split('@').pop(), 'rtsp', err.message)
-                // if (err.message == 'Output stream closed') {
-                //     RTSPCommands[command].kill()
-                // }
-                err = err.message.split(' ').slice(-2).join(' ')
-                if (err == 'Conversion failed!') {
-                    RTSPToRTSP(rtsp, type)
+                if (!err.message.includes('ffmpeg was killed with signal SIGKILL')) {
+                    console.log(rtsp.split('@').pop(), 'rtsp', err.message)
+
+                    if (
+                        err.message.includes('Conversion failed!') ||
+                        // err.message.includes('Connection refused') ||
+                        err.message.includes('Connection timed out') ||
+                        err.message.includes('Network is unreachable') ||
+                        err.message.includes('Invalid data found when processing input')
+                    ) {
+                        console.log('h264 rebuild')
+                        RTSPToRTSP(rtsp, type)
+                    }
                 }
-                // err = err.message.split(' ').slice(-3, -2).pop()
-                // if (err == '404') {
-                //     RTSPToRTSP(rtsp, type)
-                // }
             })
             .on('end', function () {
                 delete RTSPCommands[command]
@@ -105,8 +95,6 @@ function RTSPToRTSP(rtsp, type) {
             .addInputOption(
                 '-flags',
                 'low_delay',
-                // '-fflags',
-                // 'nobuffer',
                 '-rtsp_transport',
                 'tcp',
                 '-re',
@@ -116,13 +104,13 @@ function RTSPToRTSP(rtsp, type) {
                 'cuda',
                 '-c:v',
                 'hevc_cuvid',
-                '-vsync',
-                0,
+                // '-vsync',
+                // 0,
                 '-y'
             )
             .addOutputOption(
-                // '-fps_mode',
-                // 'passthrough',
+                '-fps_mode',
+                'passthrough',
                 '-rtsp_transport',
                 'tcp',
                 '-preset',
@@ -135,28 +123,25 @@ function RTSPToRTSP(rtsp, type) {
             .videoCodec('h264_nvenc')
             .noAudio()
             .on('stderr', function (err) {
-                // console.log(rtsp.split('@').pop(), 'rtsp', err)
-                err = err
-                    .split(' ')
-                    .slice(-3, err.length - 1)
-                    .join(' ')
-
-                if (
-                    err == 'muxing overhead: unknown'
-                    // || err == '404 Not Found'
-                ) {
+                if (err.includes('muxing overhead: unknown')) {
                     RTSPToRTSP(rtsp, type)
                 }
             })
             .on('error', function (err, stdout, stderr) {
-                console.log(rtsp.split('@').pop(), 'rtsp', err.message)
-                // if (err.message == 'Output stream closed') {
-                //     RTSPCommands[command].kill()
-                // }
-                // err = err.message.split(' ').slice(-3, -2).pop()
-                // if (err == '404') {
-                //     RTSPToRTSP(rtsp, type)
-                // }
+                if (!err.message.includes('ffmpeg was killed with signal SIGKILL')) {
+                    console.log(rtsp.split('@').pop(), 'rtsp', err.message)
+
+                    if (
+                        err.message.includes('Conversion failed!') ||
+                        // err.message.includes('Connection refused') ||
+                        err.message.includes('Connection timed out') ||
+                        err.message.includes('Network is unreachable') ||
+                        err.message.includes('Invalid data found when processing input')
+                    ) {
+                        console.log('h265 rebuild')
+                        RTSPToRTSP(rtsp, type)
+                    }
+                }
             })
             .on('end', function () {
                 delete RTSPCommands[command]
@@ -181,7 +166,7 @@ function MP4ToMP4(rtsp, is404 = false) {
         .slice(0, -5)
         .split('T')
         .join(' ')
-    let dir = `/mnt/d/backup`
+    let dir = backupPath
 
     for (let path of [today, ip]) {
         dir += `/${path}`
@@ -210,29 +195,11 @@ function MP4ToMP4(rtsp, is404 = false) {
         .videoCodec('copy')
         .noAudio()
         .on('stderr', function (err) {
-            // console.log(rtsp.split('@').pop(),'mp4', err)
-            err = err
-                .split(' ')
-                .slice(-3, err.length - 1)
-                .join(' ')
-
-            if (
-                err == 'muxing overhead: unknown'
-                // || err == '404 Not Found'
-            ) {
+            if (err.includes('muxing overhead: unknown')) {
                 MP4ToMP4(rtsp, true)
             }
         })
-        .on('error', function (err, stdout, stderr) {
-            console.log(rtsp.split('@').pop(), 'mp4', err.message)
-            // if (err.message == 'Output stream closed') {
-            //     MP4Commands[command].kill()
-            // }
-            // err = err.message.split(' ').slice(-3, -2).pop()
-            // if (err == '404') {
-            //     MP4ToMP4(rtsp)
-            // }
-        })
+        .on('error', function (err, stdout, stderr) {})
         .on('end', function () {
             delete MP4Commands[command]
         })
@@ -260,7 +227,7 @@ function getCommand(rtsp) {
 */
 function runMediaServer() {
     const mediaServer = spawn(
-        `/home/ubuntu/ZLMediaKit/release/linux/Debug/MediaServer -s /home/ubuntu/certificates/ssl.pem`,
+        `/home/gini-nvr/ZLMediaKit/release/linux/Debug/MediaServer -s /home/gini-nvr/certificates/ssl.pem`,
         {
             shell: true,
         }
@@ -268,30 +235,29 @@ function runMediaServer() {
 
     mediaServer.stdout.on('data', (data) => {
         data = `${data}`
+        if (data.includes('__defaultVhost__')) {
+            console.log('data', data)
+        }
         const err = data.split(' ').slice(7, 8).join(' ')
 
         // RTSP 斷訊重連
         if (err == 'RtspSession.cpp:67') {
-            console.log('ip', data.split(' '))
-            const ip = data
-                .split(' ')
-                .filter((str) => str.includes('__defaultVhost__'))
-                .join(' ')
-                .replace(/\)+/g, '/')
-                .split('/')
-                .slice(-2, -1)
-                .join(' ')
-                .match(/\d/g)
-                .join('')
-            const rtsp = rtsps.filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == ip).join(' ')
+            console.log('RtspSession.cpp:67', data)
+            data = data.split(' ').find((str) => str.includes('__defaultVhost__'))
+            if (data) {
+                const ip = data.match(/\d/g).join('')
+                const rtsp = rtsps.filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == ip).join(' ')
 
-            if (h264_rtsps.includes(rtsp)) {
-                RTSPToRTSP(rtsp, 'h264')
-            } else {
-                RTSPToRTSP(rtsp, 'h265')
+                console.log(ip, data)
+
+                if (h264_rtsps.includes(rtsp)) {
+                    RTSPToRTSP(rtsp, 'h264')
+                } else {
+                    RTSPToRTSP(rtsp, 'h265')
+                }
+
+                MP4ToMP4(rtsp, true)
             }
-
-            MP4ToMP4(rtsp, true)
         }
     })
 
@@ -308,14 +274,14 @@ function runMediaServer() {
     }
 
     // 每小時自動重啟 Media Server，校正累積延遲。
-    setTimeout(() => {
-        const killMediaServer = spawn('kill -s 9 `pgrep MediaServer`', {
-            shell: true,
-        })
-        killMediaServer.on('close', (code) => {
-            runMediaServer()
-        })
-    }, 1000 * 60 * 60)
+    // setTimeout(() => {
+    //     const killMediaServer = spawn('kill -s 9 `pgrep MediaServer`', {
+    //         shell: true,
+    //     })
+    //     killMediaServer.on('close', (code) => {
+    //         runMediaServer()
+    //     })
+    // }, 1000 * 60 * 60)
 }
 
 /*  
@@ -336,9 +302,8 @@ function runBackup() {
     // 定期清除逾期一個月備份
     setInterval(
         (function clearExpiredBackups() {
-            const dir = '/mnt/d/backup/'
-            const expireLimitDays = 1
-            fs.readdir(dir, (err, dates) => {
+            const expireLimitDays = 2
+            fs.readdir(backupPath, (err, dates) => {
                 if (err) throw err
 
                 dates.forEach((date) => {
@@ -348,7 +313,7 @@ function runBackup() {
                         .slice(0, 10)
                     let dateDiff = parseInt(Math.abs(new Date(currentDate) - new Date(date)) / 1000 / 60 / 60 / 24)
 
-                    if (dateDiff > expireLimitDays) fs.rmSync(`${dir}/${date}`, { recursive: true, force: true })
+                    if (dateDiff > expireLimitDays) fs.rmSync(`${backupPath}/${date}`, { recursive: true, force: true })
                 })
             })
             return clearExpiredBackups
@@ -379,7 +344,7 @@ app.get('/', (req, res) => {
         }
         .grid {
             display:grid;
-            grid-template-columns: auto auto auto auto auto auto;
+            grid-template-columns: auto auto auto;
             height: 100vh;
         }
         .flex{
@@ -399,7 +364,7 @@ app.get('/', (req, res) => {
         .container{
         }
     </style>
-    <script src="./lib/jessibuca-pro.js"></script>
+    <script src="../lib/jessibuca-pro.js"></script>
     <div class="grid">
         ${containers}
     </div>
@@ -410,18 +375,18 @@ app.get('/', (req, res) => {
             const player = new JessibucaPro({
                 decoder:'/lib/decoder-pro.js',
                 container: $container,
-                videoBuffer: 0.1, 
+                videoBuffer: 0, 
+                videoBufferDelay:0.3,
                 isResize: true,
-                hasAudio: false,
                 isFlv: true,
+                hasAudio: false,
                 loadingText: "",
                 debug: false,
                 showBandwidth: false, 
                 loadingTimeoutReplayTimes:-1,
                 heartTimeoutReplayTimes:-1, 
-                autoWasm:true,
-                videoBuffer:0,
-                videoBufferDelay:0.3,
+                // useMSE:true,
+                // useWCS: true,
                 useSIMD:true,
                 operateBtns: {
                     fullscreen: false,
@@ -462,7 +427,7 @@ app.get('/', (req, res) => {
             create(url, id) 
         })
         
-        // setInterval(()=>console.clear(),1000*60*5) // clear logs every 5 minutes
+        setInterval(()=>console.clear(),1000*60*30) // clear logs every half hour.
     </script> 
 `)
 })
@@ -477,21 +442,21 @@ server.listen(port, () => {
 /* 
     程式中止時，清除相關背景程序。
 */
-process.on('exit', (code) => {
-    console.log('exit')
-    server.close()
-    spawn('kill -s 9 `pgrep ffmpeg` && kill -s 9 `pgrep MediaServer`', {
-        shell: true,
-    })
-})
+// process.on('exit', (code) => {
+//     console.log('exit')
+//     server.close()
+//     spawn('kill -s 9 `pgrep ffmpeg` `pgrep MediaServer`', {
+//         shell: true,
+//     })
+// })
 
-process.on('SIGUSR2', (code) => {
-    console.log('SIGUSR2')
-    server.close()
-    spawn('kill -s 9 `pgrep ffmpeg` && kill -s 9 `pgrep MediaServer`', {
-        shell: true,
-    })
-})
+// process.on('SIGUSR2', (code) => {
+//     console.log('SIGUSR2')
+//     server.close()
+//     spawn('kill -s 9 `pgrep ffmpeg` `pgrep MediaServer`', {
+//         shell: true,
+//     })
+// })
 
 // 使用 CTRL + C 終止程式時，可開啟。
 // process.on('SIGINT', (code) => {
