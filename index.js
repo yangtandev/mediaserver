@@ -1,10 +1,16 @@
+/* 
+    Express.js & Node.js
+*/
 const { spawn } = require('child_process')
-const { h264_rtsps, h265_rtsps } = require('./config')
-const rtsps = h264_rtsps.concat(h265_rtsps)
 const https = require('https')
 const fs = require('fs')
-const ffmpeg = require('fluent-ffmpeg')
-ffmpeg.setFfmpegPath('/usr/local/bin/ffmpeg')
+const host = {
+    externalIp: require('child_process')
+        .execSync(`curl -s http://checkip.amazonaws.com || printf "0.0.0.0"`)
+        .toString()
+        .trim(),
+    internalIp: require('ip').address(),
+}
 const options = {
     key: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/privkey.pem`, 'utf8'),
     cert: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/fullchain.pem`, 'utf8'),
@@ -12,21 +18,49 @@ const options = {
 const express = require('express')
 const app = express()
 const server = https.createServer(options, app)
-const isExternalIp = false
-const localhost = isExternalIp
-    ? require('child_process').execSync(`curl -s http://checkip.amazonaws.com || printf "0.0.0.0"`).toString().trim()
-    : require('ip').address()
 const port = 445
-const segmentInSeconds = 300 // 每 5 分鐘擷取一次錄影片段
-const RTSPCommands = {}
-const MP4Commands = {}
-const backupPath = '/home/gini-nvr/Videos'
 
 /* 
-    將原始 RTSP 串流轉換成 Media Server 可接受格式。
+    Params
+*/
+const { h264_rtsps, h265_rtsps } = require('./config')
+const rtsps = h264_rtsps.concat(h265_rtsps)
+const segmentInSeconds = 300 // Capture stream fragments every 5 minutes
+const RTSPCommands = {}
+const MP4Commands = {}
+
+/* 
+    Paths
+*/
+const home = require('path').join(__dirname, '..')
+const pm2Path = `${home}/.nvm/versions/node/v14.16.1/bin/pm2`
+const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer'
+const sslPath = './certificates/ssl.pem'
+const backupPath = `./buckup`
+const ffmpeg = require('fluent-ffmpeg')
+ffmpeg.setFfmpegPath(`./nvidia/ffmpeg/ffmpeg`)
+
+/*  
+    Get command variable name.
+*/
+function getCommand(rtsp) {
+    const command = 'command'
+    const ip = rtsp.split('@').pop().match(/\d/g).join('')
+    const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+        .toISOString()
+        .replace(/\:|\-+/g, '')
+        .slice(0, -5)
+        .split('T')
+        .join('')
+
+    return `${command}_${ip}_${now}`
+}
+
+/* 
+    Convert the original RTSP stream to a format acceptable to Media Server.
 */
 function RTSPToRTSP(rtsp, type) {
-    const output = `rtsp://${localhost}:9554/live/${rtsp.split('@').pop()}`
+    const output = `rtsp://${host.internalIp}:9554/live/${rtsp.split('@').pop()}`
     const command = getCommand(rtsp)
 
     Object.keys(RTSPCommands).forEach((RTSPCommand) => {
@@ -42,15 +76,7 @@ function RTSPToRTSP(rtsp, type) {
 
     if (type == 'h264') {
         RTSPCommands[command]
-            .addInputOption(
-                '-flags',
-                'low_delay',
-                '-rtsp_transport',
-                'tcp',
-                '-re',
-                // '-vsync', 0,
-                '-y'
-            )
+            .addInputOption('-flags', 'low_delay', '-rtsp_transport', 'tcp', '-re', '-y')
             .addOutputOption(
                 '-fps_mode',
                 'passthrough',
@@ -75,13 +101,13 @@ function RTSPToRTSP(rtsp, type) {
                     console.log(rtsp.split('@').pop(), 'rtsp', err.message)
 
                     if (
-                        err.message.includes('Conversion failed!') ||
+                        // err.message.includes('Conversion failed!') ||
                         // err.message.includes('Connection refused') ||
-                        err.message.includes('Connection timed out') ||
+                        // err.message.includes('Connection timed out') ||
+                        err.message.includes('Exiting normally, received signal 2') ||
                         err.message.includes('Network is unreachable') ||
                         err.message.includes('Invalid data found when processing input')
                     ) {
-                        console.log('h264 rebuild')
                         RTSPToRTSP(rtsp, type)
                     }
                 }
@@ -104,8 +130,6 @@ function RTSPToRTSP(rtsp, type) {
                 'cuda',
                 '-c:v',
                 'hevc_cuvid',
-                // '-vsync',
-                // 0,
                 '-y'
             )
             .addOutputOption(
@@ -132,13 +156,13 @@ function RTSPToRTSP(rtsp, type) {
                     console.log(rtsp.split('@').pop(), 'rtsp', err.message)
 
                     if (
-                        err.message.includes('Conversion failed!') ||
+                        // err.message.includes('Conversion failed!') ||
                         // err.message.includes('Connection refused') ||
-                        err.message.includes('Connection timed out') ||
+                        // err.message.includes('Connection timed out') ||
+                        err.message.includes('Exiting normally, received signal 2') ||
                         err.message.includes('Network is unreachable') ||
                         err.message.includes('Invalid data found when processing input')
                     ) {
-                        console.log('h265 rebuild')
                         RTSPToRTSP(rtsp, type)
                     }
                 }
@@ -151,10 +175,10 @@ function RTSPToRTSP(rtsp, type) {
 }
 
 /* 
-    截取 Media Server 產生的 MP4 串流，並存於指定位置。
+    Capture the MP4 stream generated by the Media Server and store it in the specified location.
 */
 function MP4ToMP4(rtsp, is404 = false) {
-    const mp4 = `http://${localhost}:9080/live/${rtsp.split('@').pop()}.live.mp4`
+    const mp4 = `http://${host.internalIp}:9080/live/${rtsp.split('@').pop()}.live.mp4`
     const ip = rtsp.split('@').pop().replace(/\:+/g, '_')
     const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
         .toISOString()
@@ -168,7 +192,7 @@ function MP4ToMP4(rtsp, is404 = false) {
         .join(' ')
     let dir = backupPath
 
-    for (let path of [today, ip]) {
+    for (let path of ['', today, ip]) {
         dir += `/${path}`
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir)
@@ -207,52 +231,27 @@ function MP4ToMP4(rtsp, is404 = false) {
 }
 
 /*  
-    取得指令變數名。
-*/
-function getCommand(rtsp) {
-    const command = 'command'
-    const ip = rtsp.split('@').pop().match(/\d/g).join('')
-    const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
-        .toISOString()
-        .replace(/\:|\-+/g, '')
-        .slice(0, -5)
-        .split('T')
-        .join('')
-
-    return `${command}_${ip}_${now}`
-}
-
-/*  
-    啟動 Media Server。
+    Run media server。
 */
 function runMediaServer() {
-    const mediaServer = spawn(
-        `/home/gini-nvr/ZLMediaKit/release/linux/Debug/MediaServer -s /home/gini-nvr/certificates/ssl.pem`,
-        {
-            shell: true,
-        }
-    )
+    const mediaServer = spawn(`${mediaServerPath} -s ${sslPath}`, {
+        shell: true,
+    })
 
     mediaServer.stdout.on('data', (data) => {
         data = `${data}`
-        if (data.includes('__defaultVhost__')) {
-            console.log('data', data)
-        }
-        const err = data.split(' ').slice(7, 8).join(' ')
 
-        // RTSP 斷訊重連
-        if (err == 'RtspSession.cpp:67') {
-            console.log('RtspSession.cpp:67', data)
-            data = data.split(' ').find((str) => str.includes('__defaultVhost__'))
+        // RTSP reconnection mechanism
+        if (data.includes('RtspSession.cpp:67')) {
+            data = data.split(' ').find((str) => str.includes('__defaultVhost.internalIp__') && str.includes('RTSP'))
+
             if (data) {
                 const ip = data.match(/\d/g).join('')
                 const rtsp = rtsps.filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == ip).join(' ')
 
-                console.log(ip, data)
-
                 if (h264_rtsps.includes(rtsp)) {
                     RTSPToRTSP(rtsp, 'h264')
-                } else {
+                } else if (h265_rtsps.includes(rtsp)) {
                     RTSPToRTSP(rtsp, 'h265')
                 }
 
@@ -272,23 +271,13 @@ function runMediaServer() {
             RTSPToRTSP(rtsp, 'h265')
         })
     }
-
-    // 每小時自動重啟 Media Server，校正累積延遲。
-    // setTimeout(() => {
-    //     const killMediaServer = spawn('kill -s 9 `pgrep MediaServer`', {
-    //         shell: true,
-    //     })
-    //     killMediaServer.on('close', (code) => {
-    //         runMediaServer()
-    //     })
-    // }, 1000 * 60 * 60)
 }
 
 /*  
-    啟動備份機制。
+    Start the backup mechanism.
 */
 function runBackup() {
-    // 定期執行片段備分
+    // Periodically back up stream fragments.
     setInterval(
         (function backup() {
             rtsps.forEach((rtsp) => {
@@ -299,9 +288,9 @@ function runBackup() {
         segmentInSeconds * 1000
     )
 
-    // 定期清除逾期一個月備份
+    // Periodically clear backups that are one month overdue.
     setInterval(
-        (function clearExpiredBackups() {
+        function clearExpiredBackups() {
             const expireLimitDays = 2
             fs.readdir(backupPath, (err, dates) => {
                 if (err) throw err
@@ -316,9 +305,8 @@ function runBackup() {
                     if (dateDiff > expireLimitDays) fs.rmSync(`${backupPath}/${date}`, { recursive: true, force: true })
                 })
             })
-            return clearExpiredBackups
-        })(),
-        1000 * 60 * 60 // 每小時
+        },
+        1000 * 60 * 30 // half hour.
     )
 }
 
@@ -370,7 +358,6 @@ app.get('/', (req, res) => {
     </div>
     <script>  
         function create(url, id) {
-            const ip = url.split('/').pop().split('.').slice(0,-2).join('.')
             const $container = document.getElementById('container' + id);
             const player = new JessibucaPro({
                 decoder:'/lib/decoder-pro.js',
@@ -383,10 +370,8 @@ app.get('/', (req, res) => {
                 loadingText: "",
                 debug: false,
                 showBandwidth: false, 
-                loadingTimeoutReplayTimes:-1,
-                heartTimeoutReplayTimes:-1, 
-                // useMSE:true,
-                // useWCS: true,
+                loadingTimeoutReplayTimes:10,
+                heartTimeoutReplayTimes:10, 
                 useSIMD:true,
                 operateBtns: {
                     fullscreen: false,
@@ -399,24 +384,6 @@ app.get('/', (req, res) => {
             player.on('pause', function () {
                 player.play()   
             });
-
-            player.on("error", function (error) {
-                if (error === player.ERROR.playError ) {
-                    console.log('playError :',ip, error)
-                } else if (error === player.ERROR.fetchError ) {
-                    console.log('fetchError :',ip, error)
-                }else if (error === player.ERROR.websocketError) {
-                    console.log('websocketError:',ip, error)
-                }else if (error === player.ERROR.webcodecsH265NotSupport) {
-                    console.log('webcodecsH265NotSupport:',ip, error)
-                }else if (error === player.ERROR.mediaSourceH265NotSupport) {
-                    console.log('mediaSourceH265NotSupport:',ip, error)
-                }else if (error === player.ERROR.wasmDecodeError ) {
-                    console.log('wasmDecodeError :',ip, error)
-                }else{
-                    console.log('elseError :',ip, error)
-                }
-            })
 
             player && player.play(url)
         }
@@ -433,14 +400,21 @@ app.get('/', (req, res) => {
 })
 
 server.listen(port, () => {
-    console.log(`https://${localhost}:${port}`)
+    console.log(`https://${host.externalIp}:${port}`)
 
     runMediaServer()
     runBackup()
+
+    // Automatically restart the NVR every hour, correcting the accumulated delay.
+    setInterval(function reloadNVR() {
+        spawn(`${pm2Path} reload nvr`, {
+            shell: true,
+        })
+    }, 1000 * 60 * 60)
 })
 
 /* 
-    程式中止時，清除相關背景程序。
+    When the program terminates, clear the related background programs.
 */
 // process.on('exit', (code) => {
 //     console.log('exit')
@@ -458,11 +432,10 @@ server.listen(port, () => {
 //     })
 // })
 
-// 使用 CTRL + C 終止程式時，可開啟。
-// process.on('SIGINT', (code) => {
-//     console.log('SIGINT')
-//     server.close()
-//     spawn('kill -s 9 `pgrep ffmpeg` && kill -s 9 `pgrep MediaServer`', {
-//         shell: true,
-//     })
-// })
+process.on('SIGINT', (code) => {
+    console.log('%cSIGINT!', 'color: green')
+
+    spawn('kill -s 9 `pgrep ffmpeg` `pgrep MediaServer`', {
+        shell: true,
+    })
+})
