@@ -21,22 +21,24 @@ const server = https.createServer(options, app)
 const port = 445
 
 /* 
-    Params
+    Variables
 */
-const { h264_rtsps, h265_rtsps } = require('./config')
+const { h264_data, h265_data } = require('./config')
+const rtsps_data = h264_data.concat(h265_data)
+const h264_rtsps = h264_data.map((rtsp_data) => rtsp_data.rtsps).reduce((prev, curr) => prev.concat(curr))
+const h265_rtsps = h265_data.map((rtsp_data) => rtsp_data.rtsps).reduce((prev, curr) => prev.concat(curr))
 const rtsps = h264_rtsps.concat(h265_rtsps)
-const segmentInSeconds = 300 // Capture stream fragments every 5 minutes
+const segmentInSeconds = 60 // Capture stream fragments every 5 minutes
 const RTSPCommands = {}
 const MP4Commands = {}
 
 /* 
     Paths
 */
-const home = require('path').join(__dirname, '..')
-const pm2Path = `${home}/.nvm/versions/node/v14.16.1/bin/pm2`
-const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer'
+const pm2Path = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`
 const sslPath = './certificates/ssl.pem'
-const backupPath = `./buckup`
+const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer'
+const backupPath = `./ZLMediaKit/release/linux/Debug/www`
 const ffmpeg = require('fluent-ffmpeg')
 ffmpeg.setFfmpegPath(`./nvidia/ffmpeg/ffmpeg`)
 
@@ -60,7 +62,8 @@ function getCommand(rtsp) {
     Convert the original RTSP stream to a format acceptable to Media Server.
 */
 function RTSPToRTSP(rtsp, type) {
-    const output = `rtsp://${host.internalIp}:9554/live/${rtsp.split('@').pop()}`
+    const ip = rtsp.split('@').pop()
+    const output = `rtsp://${host.internalIp}:9554/live/${ip}`
     const command = getCommand(rtsp)
 
     Object.keys(RTSPCommands).forEach((RTSPCommand) => {
@@ -76,16 +79,41 @@ function RTSPToRTSP(rtsp, type) {
 
     if (type == 'h264') {
         RTSPCommands[command]
-            .addInputOption('-flags', 'low_delay', '-rtsp_transport', 'tcp', '-re', '-y')
+            .addInputOption(
+                '-analyzeduration',
+                '100M',
+                '-probesize',
+                '100M',
+                '-rtsp_transport',
+                'tcp',
+                '-re',
+                '-hwaccel',
+                'cuda',
+                '-hwaccel_output_format',
+                'cuda',
+                '-c:v',
+                'h264_cuvid',
+                '-y'
+            )
             .addOutputOption(
                 '-fps_mode',
                 'passthrough',
                 '-rtsp_transport',
                 'tcp',
                 '-preset',
+                '-probesize',
+                32,
                 'medium',
                 '-movflags',
-                'faststart'
+                'faststart',
+                '-b:v',
+                '2000k',
+                '-bufsize',
+                '2000k',
+                '-maxrate',
+                '2500k'
+                // '-threads',
+                // 2
             )
             .output(output)
             .outputFormat('rtsp')
@@ -97,19 +125,29 @@ function RTSPToRTSP(rtsp, type) {
                 }
             })
             .on('error', function (err, stdout, stderr) {
-                if (!err.message.includes('ffmpeg was killed with signal SIGKILL')) {
-                    console.log(rtsp.split('@').pop(), 'rtsp', err.message)
+                if (
+                    !(
+                        err.message.includes('ffmpeg was killed with signal SIGKILL') ||
+                        err.message.includes('ffmpeg exited with code 255') ||
+                        err.message.includes('ffmpeg exited with code 69') ||
+                        err.message.includes('ffmpeg exited with code 1')
+                    )
+                ) {
+                    console.log(ip, 'rtsp', err.message)
+                }
 
-                    if (
-                        // err.message.includes('Conversion failed!') ||
-                        // err.message.includes('Connection refused') ||
-                        // err.message.includes('Connection timed out') ||
-                        err.message.includes('Exiting normally, received signal 2') ||
-                        err.message.includes('Network is unreachable') ||
-                        err.message.includes('Invalid data found when processing input')
-                    ) {
-                        RTSPToRTSP(rtsp, type)
-                    }
+                if (
+                    err.message.includes('Connection refused') ||
+                    err.message.includes('Connection timed out') ||
+                    // err.message.includes('ffmpeg was killed with signal SIGKILL') ||
+                    err.message.includes('ffmpeg was killed with signal SIGSEGV') ||
+                    err.message.includes('ffmpeg exited with code 224') ||
+                    err.message.includes('5XX Server Error reply') ||
+                    err.message.includes('Immediate exit requested') ||
+                    err.message.includes('Network is unreachable') ||
+                    err.message.includes('Invalid data found when processing input')
+                ) {
+                    RTSPToRTSP(rtsp, type)
                 }
             })
             .on('end', function () {
@@ -119,8 +157,10 @@ function RTSPToRTSP(rtsp, type) {
     } else if (type == 'h265') {
         RTSPCommands[command]
             .addInputOption(
-                '-flags',
-                'low_delay',
+                '-analyzeduration',
+                '100M',
+                '-probesize',
+                '100M',
                 '-rtsp_transport',
                 'tcp',
                 '-re',
@@ -140,7 +180,15 @@ function RTSPToRTSP(rtsp, type) {
                 '-preset',
                 'medium',
                 '-movflags',
-                'faststart'
+                'faststart',
+                '-b:v',
+                '2000k',
+                '-bufsize',
+                '2000k',
+                '-maxrate',
+                '2500k'
+                // '-threads',
+                // 2
             )
             .output(output)
             .outputFormat('rtsp')
@@ -152,19 +200,29 @@ function RTSPToRTSP(rtsp, type) {
                 }
             })
             .on('error', function (err, stdout, stderr) {
-                if (!err.message.includes('ffmpeg was killed with signal SIGKILL')) {
-                    console.log(rtsp.split('@').pop(), 'rtsp', err.message)
+                if (
+                    !(
+                        err.message.includes('ffmpeg was killed with signal SIGKILL') ||
+                        err.message.includes('ffmpeg exited with code 255') ||
+                        err.message.includes('ffmpeg exited with code 69') ||
+                        err.message.includes('ffmpeg exited with code 1')
+                    )
+                ) {
+                    console.log(ip, 'rtsp', err.message)
+                }
 
-                    if (
-                        // err.message.includes('Conversion failed!') ||
-                        // err.message.includes('Connection refused') ||
-                        // err.message.includes('Connection timed out') ||
-                        err.message.includes('Exiting normally, received signal 2') ||
-                        err.message.includes('Network is unreachable') ||
-                        err.message.includes('Invalid data found when processing input')
-                    ) {
-                        RTSPToRTSP(rtsp, type)
-                    }
+                if (
+                    err.message.includes('Connection refused') ||
+                    err.message.includes('Connection timed out') ||
+                    // err.message.includes('ffmpeg was killed with signal SIGKILL') ||
+                    err.message.includes('ffmpeg was killed with signal SIGSEGV') ||
+                    err.message.includes('ffmpeg exited with code 224') ||
+                    err.message.includes('5XX Server Error reply') ||
+                    err.message.includes('Immediate exit requested') ||
+                    err.message.includes('Network is unreachable') ||
+                    err.message.includes('Invalid data found when processing input')
+                ) {
+                    RTSPToRTSP(rtsp, type)
                 }
             })
             .on('end', function () {
@@ -178,8 +236,9 @@ function RTSPToRTSP(rtsp, type) {
     Capture the MP4 stream generated by the Media Server and store it in the specified location.
 */
 function MP4ToMP4(rtsp, is404 = false) {
-    const mp4 = `http://${host.internalIp}:9080/live/${rtsp.split('@').pop()}.live.mp4`
-    const ip = rtsp.split('@').pop().replace(/\:+/g, '_')
+    const { clientName } = rtsps_data.find((rtsp_data) => rtsp_data.rtsps.includes(rtsp))
+    const ip = rtsp.split('@').pop()
+    const input = `rtsp://${host.internalIp}:9554/live/${ip}`
     const today = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
         .toISOString()
         .replace(/\:+/g, '-')
@@ -192,12 +251,13 @@ function MP4ToMP4(rtsp, is404 = false) {
         .join(' ')
     let dir = backupPath
 
-    for (let path of ['', today, ip]) {
+    for (let path of [clientName, 'backup', today, ip]) {
         dir += `/${path}`
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir)
         }
     }
+
     const command = getCommand(rtsp)
 
     if (is404) {
@@ -211,10 +271,19 @@ function MP4ToMP4(rtsp, is404 = false) {
         })
     }
 
-    MP4Commands[command] = ffmpeg(mp4)
+    MP4Commands[command] = ffmpeg(input)
 
     MP4Commands[command]
-        .addOutputOption('-preset', 'medium', '-movflags', 'faststart', '-t', segmentInSeconds)
+        .addInputOption('-rtsp_transport', 'tcp', '-re', '-y')
+        .addOutputOption(
+            '-preset',
+            'medium',
+            '-movflags',
+            'faststart',
+            '-t',
+            segmentInSeconds
+            // , '-threads', 2
+        )
         .outputFormat('mp4')
         .videoCodec('copy')
         .noAudio()
@@ -223,7 +292,22 @@ function MP4ToMP4(rtsp, is404 = false) {
                 MP4ToMP4(rtsp, true)
             }
         })
-        .on('error', function (err, stdout, stderr) {})
+        .on('error', function (err, stdout, stderr) {
+            if (
+                err.message.includes('Connection refused') ||
+                err.message.includes('Connection timed out') ||
+                // err.message.includes('ffmpeg was killed with signal SIGKILL') ||
+                err.message.includes('ffmpeg was killed with signal SIGSEGV') ||
+                err.message.includes('ffmpeg exited with code 255') ||
+                err.message.includes('ffmpeg exited with code 224') ||
+                err.message.includes('5XX Server Error reply') ||
+                err.message.includes('Immediate exit requested') ||
+                err.message.includes('Network is unreachable') ||
+                err.message.includes('Invalid data found when processing input')
+            ) {
+                MP4ToMP4(rtsp, true)
+            }
+        })
         .on('end', function () {
             delete MP4Commands[command]
         })
@@ -291,7 +375,7 @@ function runBackup() {
     // Periodically clear backups that are one month overdue.
     setInterval(
         function clearExpiredBackups() {
-            const expireLimitDays = 2
+            const expireLimitDays = 30
             fs.readdir(backupPath, (err, dates) => {
                 if (err) throw err
 
@@ -310,6 +394,12 @@ function runBackup() {
     )
 }
 
+function reloadNVR() {
+    spawn(`${pm2Path} reload nvr`, {
+        shell: true,
+    })
+}
+
 app.use(express.static(__dirname))
 
 app.get('/', (req, res) => {
@@ -322,80 +412,100 @@ app.get('/', (req, res) => {
     })
 
     res.send(` 
-    <style type="text/css" scoped>
-        body{
-            margin: 0;
-            background-color: black;
-        }
-        body::-webkit-scrollbar {
-            display: none;
-        }
-        .grid {
-            display:grid;
-            grid-template-columns: auto auto auto;
-            height: 100vh;
-        }
-        .flex{
-            display:flex;
-            flex-direction:column;
-            justify-content: center;    
-            align-items: center;
-            height:33.3vh;   
-        }
-        .title{
-            display:block;
-            font-size: 1.5em;
-            font-weight: bold;
-            color: white;
-            margin: 0.5em 0em 0.5em 0em;
-        }
-        .container{
-        }
-    </style>
-    <script src="../lib/jessibuca-pro.js"></script>
-    <div class="grid">
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>NVR</title>
+        <style type="text/css" scoped>
+            body{
+                margin: 0;
+                background-color: black;
+            }
+            body::-webkit-scrollbar {
+                display: none;
+            }
+            .grid {
+                display:grid;
+                grid-template-columns: auto auto auto;
+                height: 100vh;
+            }
+            .flex{
+                display:flex;
+                flex-direction:column;
+                justify-content: center;    
+                align-items: center;
+                height:33.3vh;   
+            }
+            .title{
+                display:block;
+                font-size: 1.5em;
+                font-weight: bold;
+                color: white;
+                margin: 0.5em 0em 0.5em 0em;
+            }
+            .container{
+            }
+        </style>
+        <script src="../lib/jessibuca-pro.js"></script>
+    </head>
+    <body>
+        <div class="grid">
         ${containers}
-    </div>
-    <script>  
-        function create(url, id) {
-            const $container = document.getElementById('container' + id);
-            const player = new JessibucaPro({
-                decoder:'/lib/decoder-pro.js',
-                container: $container,
-                videoBuffer: 0, 
-                videoBufferDelay:0.3,
-                isResize: true,
-                isFlv: true,
-                hasAudio: false,
-                loadingText: "",
-                debug: false,
-                showBandwidth: false, 
-                loadingTimeoutReplayTimes:10,
-                heartTimeoutReplayTimes:10, 
-                useSIMD:true,
-                operateBtns: {
-                    fullscreen: false,
-                    screenshot: false,
-                    play: false,
-                    audio: false,
-                }
-            },);
+        </div>
+        <script>  
+            function create(url, id, ip) {
+                const $container = document.getElementById('container' + id);
+                const player = new JessibucaPro({
+                    decoder:'/lib/decoder-pro.js',
+                    container: $container,
+                    videoBuffer: 0, 
+                    videoBufferDelay:0.3,
+                    isResize: true,
+                    isFlv: true,
+                    hasAudio: false,
+                    loadingText: "",
+                    debug: false,
+                    showBandwidth: false, 
+                    loadingTimeoutReplayTimes:-1,
+                    heartTimeoutReplayTimes:-1, 
+                    useWCS: true,
+                    useMSE: true,
+                    useSIMD:true,
+                    operateBtns: {
+                        fullscreen: false,
+                        screenshot: false,
+                        play: false,
+                        audio: false,
+                    }
+                },);
 
-            player.on('pause', function () {
-                player.play()   
-            });
+                player.on("error", function (error) {
+                    player.destroy()
+                    create(url, id, ip)
+                });
 
-            player && player.play(url)
-        }
+                player.on('pause', function () {
+                    player.play()   
+                });
 
-        const urls = [${rtsps.map((rtsp) => `'wss://stream.ginibio.com/live/${rtsp.split('@').pop()}.live.flv'`)}]
+                player && player.play(url)
+            }
 
-        urls.forEach((url, id)=>{  
-            create(url, id) 
-        })
-        
-        setInterval(()=>console.clear(),1000*60*30) // clear logs every half hour.
-    </script> 
+            const urls = [${rtsps.map((rtsp) => `'wss://stream.ginibio.com/live/${rtsp.split('@').pop()}.live.flv'`)}]
+            
+            
+            urls.forEach((url, id)=>{  
+                const ip = url.split('/').pop().split('.').slice(0,4).join('.')
+                create(url, id, ip) 
+            })
+
+            setInterval(()=>console.clear(),1000*60) // clear logs every minute.
+        </script> 
+    </body>
+    </html>
 `)
 })
 
@@ -405,12 +515,8 @@ server.listen(port, () => {
     runMediaServer()
     runBackup()
 
-    // Automatically restart the NVR every hour, correcting the accumulated delay.
-    setInterval(function reloadNVR() {
-        spawn(`${pm2Path} reload nvr`, {
-            shell: true,
-        })
-    }, 1000 * 60 * 60)
+    // Automatically restart the NVR every 10 minutes, correcting the accumulated delay.
+    // setInterval(reloadNVR, 1000 * 60 * 10)
 })
 
 /* 
@@ -433,9 +539,18 @@ server.listen(port, () => {
 // })
 
 process.on('SIGINT', (code) => {
-    console.log('%cSIGINT!', 'color: green')
+    String('SIGINT')
+        .split('')
+        .forEach((word) => {
+            const slashes = String('|').repeat(30)
+            console.log(`${slashes} ${word} ${slashes}`)
+        })
 
-    spawn('kill -s 9 `pgrep ffmpeg` `pgrep MediaServer`', {
+    const clearPrograms = spawn('kill -s 9 `pgrep ffmpeg` `pgrep MediaServer`', {
         shell: true,
+    })
+
+    clearPrograms.on('close', (code) => {
+        reloadNVR()
     })
 })
