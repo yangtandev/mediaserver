@@ -28,7 +28,7 @@ const rtsps_data = h264_data.concat(h265_data)
 const h264_rtsps = h264_data.map((rtsp_data) => rtsp_data.rtsps).reduce((prev, curr) => prev.concat(curr))
 const h265_rtsps = h265_data.map((rtsp_data) => rtsp_data.rtsps).reduce((prev, curr) => prev.concat(curr))
 const rtsps = h264_rtsps.concat(h265_rtsps)
-const segmentInSeconds = 60 // Capture stream fragments every 5 minutes
+const segmentInSeconds = 300 // Capture stream fragments every 5 minutes
 const RTSPCommands = {}
 const MP4Commands = {}
 
@@ -101,8 +101,6 @@ function RTSPToRTSP(rtsp, type) {
                 '-rtsp_transport',
                 'tcp',
                 '-preset',
-                '-probesize',
-                32,
                 'medium',
                 '-movflags',
                 'faststart',
@@ -112,12 +110,10 @@ function RTSPToRTSP(rtsp, type) {
                 '2000k',
                 '-maxrate',
                 '2500k'
-                // '-threads',
-                // 2
             )
             .output(output)
             .outputFormat('rtsp')
-            .videoCodec('copy')
+            .videoCodec('h264_nvenc')
             .noAudio()
             .on('stderr', function (err) {
                 if (err.includes('muxing overhead: unknown')) {
@@ -187,8 +183,6 @@ function RTSPToRTSP(rtsp, type) {
                 '2000k',
                 '-maxrate',
                 '2500k'
-                // '-threads',
-                // 2
             )
             .output(output)
             .outputFormat('rtsp')
@@ -274,16 +268,8 @@ function MP4ToMP4(rtsp, is404 = false) {
     MP4Commands[command] = ffmpeg(input)
 
     MP4Commands[command]
-        .addInputOption('-rtsp_transport', 'tcp', '-re', '-y')
-        .addOutputOption(
-            '-preset',
-            'medium',
-            '-movflags',
-            'faststart',
-            '-t',
-            segmentInSeconds
-            // , '-threads', 2
-        )
+        .addInputOption('-rtsp_transport', 'tcp', '-re')
+        .addOutputOption('-preset', 'medium', '-movflags', 'faststart', '-t', segmentInSeconds)
         .outputFormat('mp4')
         .videoCodec('copy')
         .noAudio()
@@ -469,6 +455,9 @@ app.get('/', (req, res) => {
                     loadingText: "",
                     debug: false,
                     showBandwidth: false, 
+                    heartTimeout: 3,
+                    loadingTimeout: 3,
+                    timeout: 3,
                     loadingTimeoutReplayTimes:-1,
                     heartTimeoutReplayTimes:-1, 
                     useWCS: true,
@@ -482,13 +471,18 @@ app.get('/', (req, res) => {
                     }
                 },);
 
-                player.on("error", function (error) {
-                    player.destroy()
+                player.on("timeout", async function (error) {
+                    await player.destroy()
+                    create(url, id, ip)
+                });
+
+                player.on("error", async function (error) {
+                    await player.destroy()
                     create(url, id, ip)
                 });
 
                 player.on('pause', function () {
-                    player.play()   
+                    player.play()
                 });
 
                 player && player.play(url)
