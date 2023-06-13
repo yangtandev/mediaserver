@@ -1,4 +1,3 @@
-ZLMediaKit/release/linux/Debug/www/* 
 .Trash-1000/
 ### Node ###
 # Logs
@@ -141,3 +140,7 @@ dist
 .svelte-kit
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+
+
+# ZLMediaKit
+ZLMediaKit/release/
