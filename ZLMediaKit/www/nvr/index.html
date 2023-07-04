@@ -15,14 +15,23 @@
         <script type="module">
             import rtspList from './rtsp-list/rtsp-list.json' assert { type: 'json' }
 
+            // setInterval(() => location.reload(), 1000 * 60 * 30) // Reload page automatically.
+            setInterval(() => console.clear(), 0) // Clear log endlessly.
+
             const segmentInSeconds = 300
-            const h264RtspList = rtspList.h264RtspConfig
-                .map((rtspConfig) => rtspConfig.rtspList)
-                .reduce((prev, curr) => prev.concat(curr))
-            const h265RtspList = rtspList.h265RtspConfig
-                .map((rtspConfig) => rtspConfig.rtspList)
-                .reduce((prev, curr) => prev.concat(curr))
-            const urlList = h264RtspList.concat(h265RtspList).map((rtsp) => rtsp.split('@').pop())
+            const h264RtspList =
+                rtspList.h264RtspConfig.length > 0
+                    ? rtspList.h264RtspConfig
+                          .map((rtspConfig) => rtspConfig.rtspList)
+                          .reduce((prev, curr) => prev.concat(curr))
+                    : []
+            const hevcRtspList =
+                rtspList.hevcRtspConfig.length > 0
+                    ? rtspList.hevcRtspConfig
+                          .map((rtspConfig) => rtspConfig.rtspList)
+                          .reduce((prev, curr) => prev.concat(curr))
+                    : []
+            const urlList = h264RtspList.concat(hevcRtspList).map((rtsp) => rtsp.split('@').pop())
             const wssUrlList = urlList.map((url) => `wss://stream.ginibio.com/live/${url}.live.flv`)
             const app = Vue.createApp({})
 
@@ -102,9 +111,6 @@
 
                             this.players[index] && this.players[index].play(wssUrl)
                         })
-
-                        setInterval(() => location.reload(), 1000 * 60 * 30) // Reload page automatically.
-                        setInterval(() => console.clear(), 0) // Clear log endlessly.
                     },
                 },
             })

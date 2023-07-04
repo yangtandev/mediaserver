@@ -47,10 +47,8 @@
                         this.height = `${count * 20}px`
                     },
                     saveFile: function () {
-                        const newWindow = window.open('https://61.219.139.176:445/updateRtspList')
-
                         axios
-                            .post('https://61.219.139.176:445/updateRtspList', { data: this.value })
+                            .post('https://stream.ginibio.com:3000/updateRtspList', { data: this.value })
                             .then((res) => {
                                 const { data } = res
                                 if (data) {
