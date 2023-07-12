@@ -1,2 +1,0 @@
-/usr/bin/ar qc ../../release/linux/Debug/libsrt.a CMakeFiles/srt.dir/Ack.cpp.o CMakeFiles/srt.dir/HSExt.cpp.o CMakeFiles/srt.dir/NackContext.cpp.o CMakeFiles/srt.dir/Packet.cpp.o CMakeFiles/srt.dir/PacketQueue.cpp.o CMakeFiles/srt.dir/PacketSendQueue.cpp.o CMakeFiles/srt.dir/SrtSession.cpp.o CMakeFiles/srt.dir/SrtTransport.cpp.o CMakeFiles/srt.dir/SrtTransportImp.cpp.o CMakeFiles/srt.dir/Statistic.cpp.o
-/usr/bin/ranlib ../../release/linux/Debug/libsrt.a
