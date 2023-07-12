@@ -2,22 +2,16 @@
     "h264RtspConfig": [
         {
             "clientName": "fengshun",
-            "rtspList": [
-                "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8081",
-                "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8092"
-            ]
+            "rtspList": ["rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8081"]
         }
     ],
-    "h265RtspConfig": [
+    "hevcRtspConfig": [
         {
             "clientName": "fengshun",
             "rtspList": [
                 "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8082",
                 "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8083",
                 "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8084",
-                "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8085",
-                "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8086",
-                "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8087",
                 "rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8088"
             ]
         },
@@ -59,10 +53,7 @@
         },
         {
             "clientName": "gini",
-            "rtspList": [
-                "rtsp://admin:!QAZ2wsx87518499@192.168.2.59",
-                "rtsp://admin:!QAZ2wsx87518499@192.168.2.60"
-            ]
+            "rtspList": ["rtsp://admin:!QAZ2wsx87518499@192.168.2.59", "rtsp://admin:!QAZ2wsx87518499@192.168.2.60"]
         }
     ]
 }

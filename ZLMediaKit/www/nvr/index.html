@@ -15,7 +15,7 @@
         <script type="module">
             import rtspList from './rtsp-list/rtsp-list.json' assert { type: 'json' }
 
-            // setInterval(() => location.reload(), 1000 * 60 * 30) // Reload page automatically.
+            setInterval(() => location.reload(), 1000 * 60 * 30) // Reload page automatically.
             setInterval(() => console.clear(), 0) // Clear log endlessly.
 
             const segmentInSeconds = 300
@@ -67,9 +67,9 @@
                             debug: false,
                             loadingText: '',
                             showBandwidth: false,
-                            timeout: 5,
-                            heartTimeout: 5,
-                            loadingTimeout: 5,
+                            timeout: 10,
+                            heartTimeout: 10,
+                            loadingTimeout: 10,
                             heartTimeoutReplayTimes: -1,
                             loadingTimeoutReplayTimes: -1,
                             supportDblclickFullscreen: true,

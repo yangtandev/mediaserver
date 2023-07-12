@@ -41,7 +41,7 @@ function RTSPToRTSP(rtsp, type) {
     const output = `rtsp://localhost:9554/live/${ip}`
 
     if (rtspCommands.hasOwnProperty(id)) {
-        rtspCommands[id].kill('SIGKILL')
+        rtspCommands[id].kill()
     }
 
     rtspCommands[id] = ffmpeg(rtsp)
@@ -89,6 +89,9 @@ function RTSPToRTSP(rtsp, type) {
                 RTSPToRTSP(rtsp, type)
             }
         })
+        .on('end', function (err, stdout, stderr) {
+            RTSPToRTSP(rtsp, type)
+        })
         .run()
 }
 
@@ -128,12 +131,6 @@ function RTSPToMP4(rtsp) {
             'medium',
             '-movflags',
             'faststart',
-            '-b:v',
-            '2000k',
-            '-bufsize',
-            '2000k',
-            '-maxrate',
-            '2500k',
             '-avoid_negative_ts',
             'make_zero',
             '-threads',
@@ -164,7 +161,7 @@ function setRtspList() {
     const source = JSON.parse(fs.readFileSync(rtspListPath, 'utf8'))
     config.h264RtspConfig = source.h264RtspConfig
     config.hevcRtspConfig = source.hevcRtspConfig
-    config.allRtspConfig = config.h264RtspConfig.concat(config.hevcRtspConfig)
+    config.allRtspConfig = [].concat(config.h264RtspConfig).concat(config.hevcRtspConfig)
 
     if (config.h264RtspConfig.length > 0) {
         config.h264RtspList = config.h264RtspConfig
@@ -280,9 +277,23 @@ app.post('/updateRtspList', cors({ origin: 'https://stream.ginibio.com' }), (req
         fs.writeFile(rtspListPath, data, (err) => {
             if (err) throw err
 
-            setRtspList()
-            runMediaServer()
-            runBackup()
+            // Terminate all processes related to ffmpeg and media server.
+            const killProcesses = spawn('killall -9 ffmpeg MediaServer', {
+                shell: true,
+            })
+
+            killProcesses.on('close', (code) => {
+                // Terminate all zombie processes.
+                const killZombieProcesses = spawn(`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`, {
+                    shell: true,
+                })
+
+                killZombieProcesses.on('close', (code) => {
+                    setRtspList()
+                    runMediaServer()
+                    runBackup()
+                })
+            })
         })
         res.send('success')
     } catch (err) {
@@ -319,14 +330,21 @@ process.on('SIGINT', (code) => {
             const slashes = String('|').repeat(30)
             console.log(`${slashes} ${word} ${slashes}`)
         })
-
     // Terminate all processes related to ffmpeg and media server.
-    spawn('killall -9 ffmpeg MediaServer', {
+    const killProcesses = spawn('killall -9 ffmpeg MediaServer', {
         shell: true,
     })
 
-    // Terminate all zombie processes.
-    spawn(`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`, {
-        shell: true,
+    killProcesses.on('close', (code) => {
+        // Terminate all zombie processes.
+        const killZombieProcesses = spawn(`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`, {
+            shell: true,
+        })
+
+        killZombieProcesses.on('close', (code) => {
+            // setRtspList()
+            // runMediaServer()
+            // runBackup()
+        })
     })
 })
