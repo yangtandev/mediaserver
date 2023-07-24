@@ -1,11 +1,15 @@
 {
-    "h264RtspConfig": [
+    "h264ClientList": [
+        {
+            "clientName": "gini",
+            "rtspList": ["rtsp://admin:!QAZ2wsx87518499@192.168.2.59", "rtsp://admin:!QAZ2wsx87518499@192.168.2.60"]
+        },
         {
             "clientName": "fengshun",
             "rtspList": ["rtsp://admin:!QAZ2wsx87518499@125.227.20.55:8081"]
         }
     ],
-    "hevcRtspConfig": [
+    "hevcClientList": [
         {
             "clientName": "fengshun",
             "rtspList": [
@@ -50,10 +54,6 @@
                 "rtsp://admin:!QAZ87518499@61.219.139.179:8083",
                 "rtsp://admin:!QAZ87518499@61.219.139.179:8084"
             ]
-        },
-        {
-            "clientName": "gini",
-            "rtspList": ["rtsp://admin:!QAZ2wsx87518499@192.168.2.59", "rtsp://admin:!QAZ2wsx87518499@192.168.2.60"]
         }
     ]
 }

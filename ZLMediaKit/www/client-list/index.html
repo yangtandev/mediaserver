@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Rtsp List</title>
+        <title>Client List</title>
         <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     </head>
@@ -13,7 +13,7 @@
             <main-component></main-component>
         </div>
         <script type="module">
-            import rtspList from './rtsp-list/rtsp-list.json' assert { type: 'json' }
+            import clientList from './client-list/client-list.json' assert { type: 'json' }
 
             const app = Vue.createApp({})
 
@@ -24,7 +24,7 @@
                 `,
                 data() {
                     return {
-                        value: JSON.stringify(rtspList, null, 4),
+                        value: JSON.stringify(clientList, null, 4),
                         height: '16px',
                     }
                 },
@@ -48,12 +48,13 @@
                     },
                     saveFile: function () {
                         axios
-                            .post('https://stream.ginibio.com:3000/updateRtspList', { data: this.value })
+                            .post('https://stream.ginibio.com:3000/updateClientList', { data: this.value })
                             .then((res) => {
                                 const { data } = res
                                 if (data) {
                                     if (data == 'success') {
                                         alert('更新成功: 資料已更新!')
+                                        location.reload()
                                     } else if (data.includes('Unexpected token g in JSON')) {
                                         alert('更新失敗: 格式錯誤!')
                                     } else {
