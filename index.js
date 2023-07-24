@@ -253,18 +253,22 @@ function runBackup() {
     Periodically clear backups that are one month overdue.
 */
 function clearExpiredBackup() {
+    const clientList = config.clientList.map((client) => client.clientName)
     const expireLimitDays = 30
-    fs.readdir(backupPath, (err, dates) => {
-        if (err) throw err
+    for (const client of clientList) {
+        fs.readdir(`${backupPath}/${client}/backup`, (err, dates) => {
+            if (err) throw err
 
-        dates.forEach((date) => {
-            const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
-            const currentDate = now.toISOString().replace(/\:+/g, '-').slice(0, 10)
-            let dateDiff = parseInt(Math.abs(new Date(currentDate) - new Date(date)) / 1000 / 60 / 60 / 24)
+            dates.forEach((date) => {
+                const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+                const currentDate = now.toISOString().replace(/\:+/g, '-').slice(0, 10)
+                let dateDiff = parseInt(Math.abs(new Date(currentDate) - new Date(date)) / 1000 / 60 / 60 / 24)
 
-            if (dateDiff > expireLimitDays) fs.rmSync(`${backupPath}/${date}`, { recursive: true, force: true })
+                if (dateDiff > expireLimitDays)
+                    fs.rmSync(`${backupPath}/${client}/backup/${date}`, { recursive: true, force: true })
+            })
         })
-    })
+    }
 }
 
 app.use(cors())
