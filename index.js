@@ -1,342 +1,434 @@
 /* 
     Express.js & Node.js
 */
-const { spawn } = require('child_process')
-const https = require('https')
-const fs = require('fs')
+const { spawn } = require('child_process');
+const https = require('https');
+const fs = require('fs');
 const options = {
-    key: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/privkey.pem`, 'utf8'),
-    cert: fs.readFileSync(`/etc/letsencrypt/live/stream.ginibio.com/fullchain.pem`, 'utf8'),
-}
-const express = require('express')
-const cors = require('cors')
-const app = express()
-const server = https.createServer(options, app)
-const port = 3000
+	key: fs.readFileSync(
+		`/etc/letsencrypt/live/stream.ginibio.com/privkey.pem`,
+		'utf8'
+	),
+	cert: fs.readFileSync(
+		`/etc/letsencrypt/live/stream.ginibio.com/fullchain.pem`,
+		'utf8'
+	),
+};
+const express = require('express');
+const cors = require('cors');
+const app = express();
+const server = https.createServer(options, app);
+const port = 3000;
 
 /* 
     Variables
 */
-const config = {}
-const rtspCommands = {}
-const mp4Commands = {}
+const config = {};
+const rtspCommands = {};
+const mp4Commands = {};
 
 /*
     Paths
 */
-const pm2Path = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`
-const sslPath = './certificates/ssl.pem'
-const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer'
-const backupPath = `./ZLMediaKit/release/linux/Debug/www`
-const clientListPath = `./ZLMediaKit/release/linux/Debug/www/client-list/client-list.json`
-const ffmpeg = require('fluent-ffmpeg')
-ffmpeg.setFfmpegPath(`./nvidia/ffmpeg/ffmpeg`)
+const pm2Path = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`;
+const sslPath = './certificates/ssl.pem';
+const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer';
+const backupPath = `./ZLMediaKit/release/linux/Debug/www`;
+const clientListPath = `./ZLMediaKit/release/linux/Debug/www/client-list/client-list.json`;
+const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath(`./nvidia/ffmpeg/ffmpeg`);
 
 /*
     Convert the original RTSP stream to a format acceptable to Media Server.
 */
 function RTSPToRTSP(rtsp, type) {
-    const ip = rtsp.split('@').pop()
-    const id = ip.match(/\d+/g)
-    const output = `rtsp://localhost:9554/live/${ip}`
+	const ip = rtsp.split('@').pop().split('/').shift();
+	const id = ip.match(/\d+/g);
+	const output = `rtsp://localhost:9554/live/${ip}`;
 
-    if (rtspCommands.hasOwnProperty(id)) {
-        rtspCommands[id].kill()
-    }
+	if (rtspCommands.hasOwnProperty(id)) {
+		rtspCommands[id].kill('SIGKILL');
+	}
 
-    rtspCommands[id] = ffmpeg(rtsp)
-    rtspCommands[id]
-        .addInputOption(
-            '-rtsp_transport',
-            'tcp',
-            '-re',
-            '-hwaccel',
-            'cuda',
-            '-hwaccel_output_format',
-            'cuda',
-            '-c:v',
-            `${type}_cuvid`
-        )
-        .addOutputOption(
-            '-fps_mode',
-            'passthrough',
-            '-rtsp_transport',
-            'tcp',
-            '-preset',
-            'medium',
-            '-movflags',
-            'faststart',
-            '-threads',
-            2
-        )
-        .output(output)
-        .outputFormat('rtsp')
-        .videoCodec('h264_nvenc')
-        .noAudio()
-        .on('stderr', function (err) {
-            if (err.includes('muxing overhead: unknown') || err.includes('Error muxing a packet')) {
-                RTSPToRTSP(rtsp, type)
-            }
-        })
-        .on('error', function (err, stdout, stderr) {
-            if (
-                err.message.includes('5XX Server Error reply') ||
-                err.message.includes('Connection refused') ||
-                err.message.includes('Connection timed out') ||
-                err.message.includes('Invalid data found when processing input') ||
-                err.message.includes('Conversion failed') ||
-                err.message.includes('ffmpeg exited with code 1')
-            ) {
-                RTSPToRTSP(rtsp, type)
-            }
-        })
-        .on('end', function () {
-            RTSPToRTSP(rtsp, type)
-        })
-        .run()
+	rtspCommands[id] = ffmpeg(rtsp);
+	rtspCommands[id]
+		.addInputOption(
+			'-rtsp_transport',
+			'tcp',
+			'-re',
+			'-hwaccel',
+			'cuda',
+			'-hwaccel_output_format',
+			'cuda',
+			'-c:v',
+			`${type}_cuvid`
+		)
+		.addOutputOption(
+			'-fps_mode',
+			'passthrough',
+			'-rtsp_transport',
+			'tcp',
+			'-preset',
+			'medium',
+			'-movflags',
+			'faststart',
+			'-threads',
+			2
+		)
+		.output(output)
+		.outputFormat('rtsp')
+		.videoCodec('h264_nvenc')
+		.noAudio()
+		.on('stderr', function (err) {
+			if (
+				err.includes('muxing overhead: unknown') ||
+				err.includes('Error muxing a packet')
+			) {
+				RTSPToRTSP(rtsp, type);
+			}
+		})
+		.on('error', function (err, stdout, stderr) {
+			if (
+				// err.message.includes('5XX Server Error reply') ||
+				// err.message.includes('Connection refused') ||
+				err.message.includes('Connection timed out') ||
+				err.message.includes(
+					'Invalid data found when processing input'
+				) ||
+				// err.message.includes('Conversion failed') ||
+				err.message.includes('Generic error in an external library')
+			) {
+				RTSPToRTSP(rtsp, type);
+			}
+		})
+		.on('end', function () {
+			RTSPToRTSP(rtsp, type);
+		})
+		.run();
 }
 
 /*
     Capture the MP4 stream generated by the Media Server and store it in the specified location.
 */
 function RTSPToMP4(rtsp) {
-    const { clientName } = config.clientList.find((clinet) => clinet.rtspList.includes(rtsp))
-    const ip = rtsp.split('@').pop()
-    const id = ip.match(/\d+/g)
-    const input = `rtsp://localhost:9554/live/${ip}`
-    const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000 + 8000)
-    const today = now.toISOString().replace(/\:+/g, '-').slice(0, 10)
-    const fileName = now.toISOString().slice(0, -5).split('T').join(' ')
-    let output = backupPath
+	const { clientName } = config.clientList.find((clinet) =>
+		clinet.rtspList.includes(rtsp)
+	);
+	const ip = rtsp.split('@').pop().split('/').shift();
+	const id = ip.match(/\d+/g);
+	const input = `rtsp://localhost:9554/live/${ip}`;
+	const now = new Date(
+		new Date().getTime() - new Date().getTimezoneOffset() * 60000 + 13000
+	);
+	const today = now.toISOString().replace(/\:+/g, '-').slice(0, 10);
+	const fileName = now.toISOString().slice(0, -5).split('T').join(' ');
+	let output = backupPath;
 
-    for (let path of [clientName, 'backup', today, ip]) {
-        output += `/${path}`
-        if (!fs.existsSync(output)) {
-            fs.mkdirSync(output)
-        }
-    }
+	for (let path of [clientName, 'backup', today, ip]) {
+		output += `/${path}`;
+		if (!fs.existsSync(output)) {
+			fs.mkdirSync(output);
+		}
+	}
 
-    output += `/${fileName}.mp4`
+	output += `/${fileName}.mp4`;
 
-    if (mp4Commands.hasOwnProperty(id)) {
-        mp4Commands[id].kill('SIGINT')
-    }
+	if (mp4Commands.hasOwnProperty(id)) {
+		mp4Commands[id].kill();
+	}
 
-    mp4Commands[id] = ffmpeg(input)
-    mp4Commands[id]
-        .addInputOption('-rtsp_transport', 'tcp', '-re', '-ss', 0, '-t', 300)
-        .addOutputOption(
-            '-fps_mode',
-            'passthrough',
-            '-preset',
-            'medium',
-            '-movflags',
-            'faststart',
-            '-avoid_negative_ts',
-            'make_zero',
-            '-threads',
-            2
-        )
-        .videoCodec('h264_nvenc')
-        .noAudio()
-        .on('stderr', function (err) {
-            if (err.includes('Error submitting video frame to the encoder')) {
-                RTSPToMP4(rtsp)
-            }
-        })
-        .on('error', function (err, stdout, stderr) {
-            if (err.message.includes('Conversion failed') || err.message.includes('Connection refused')) {
-                RTSPToMP4(rtsp)
-            }
-        })
-        .on('end', function () {
-            RTSPToMP4(rtsp)
-        })
-        .save(output)
+	mp4Commands[id] = ffmpeg(input);
+	mp4Commands[id]
+		.addInputOption(
+			'-rtsp_transport',
+			'tcp',
+			'-use_wallclock_as_timestamps',
+			1,
+			'-ss',
+			0,
+			'-to',
+			300
+		)
+		.addOutputOption(
+			'-fps_mode',
+			'passthrough',
+			'-preset',
+			'medium',
+			'-movflags',
+			'faststart',
+			'-avoid_negative_ts',
+			'make_zero',
+			'-threads',
+			2
+		)
+		.videoCodec('h264_nvenc')
+		.noAudio()
+		.on('start', function (commandLine) {})
+		.on('stderr', function (err) {
+			if (err.includes('Error submitting video frame to the encoder')) {
+				RTSPToMP4(rtsp);
+			}
+		})
+		.on('error', function (err, stdout, stderr) {
+			if (
+				// err.message.includes('Connection refused')||
+				err.message.includes('Conversion failed')
+			) {
+				RTSPToMP4(rtsp);
+			}
+		})
+		.on('end', function () {
+			RTSPToMP4(rtsp);
+		})
+		.save(output);
 }
 
 /*
     Set rtsp list related variables.
 */
 function setRtspList() {
-    const source = JSON.parse(fs.readFileSync(clientListPath, 'utf8'))
-    config.h264ClientList = source.h264ClientList
-    config.hevcClientList = source.hevcClientList
-    config.clientList = config.h264ClientList.concat(config.hevcClientList)
+	const source = JSON.parse(fs.readFileSync(clientListPath, 'utf8'));
+	config.h264ClientList = source.h264ClientList;
+	config.hevcClientList = source.hevcClientList;
+	config.clientList = config.h264ClientList.concat(config.hevcClientList);
 
-    if (config.h264ClientList.length > 0) {
-        config.h264RtspList = config.h264ClientList
-            .map((client) => client.rtspList)
-            .reduce((prev, curr) => prev.concat(curr))
-    } else {
-        config.h264ClientList = []
-        config.h264RtspList = []
-    }
+	if (config.h264ClientList.length > 0) {
+		config.h264RtspList = config.h264ClientList
+			.map((client) => client.rtspList)
+			.reduce((prev, curr) => prev.concat(curr));
+	} else {
+		config.h264ClientList = [];
+		config.h264RtspList = [];
+	}
 
-    if (config.hevcClientList.length > 0) {
-        config.hevcRtspList = config.hevcClientList
-            .map((client) => client.rtspList)
-            .reduce((prev, curr) => prev.concat(curr))
-    } else {
-        config.hevcClientList = []
-        config.hevcRtspList = []
-    }
+	if (config.hevcClientList.length > 0) {
+		config.hevcRtspList = config.hevcClientList
+			.map((client) => client.rtspList)
+			.reduce((prev, curr) => prev.concat(curr));
+	} else {
+		config.hevcClientList = [];
+		config.hevcRtspList = [];
+	}
 
-    config.allRtspList = [].concat(config.h264RtspList).concat(config.hevcRtspList)
+	config.allRtspList = []
+		.concat(config.h264RtspList)
+		.concat(config.hevcRtspList);
 }
 
 /*
     Run media server。
 */
 function runMediaServer() {
-    const mediaServer = spawn(`${mediaServerPath} -s ${sslPath}`, {
-        shell: true,
-    })
+	const mediaServer = spawn(`${mediaServerPath} -s ${sslPath}`, {
+		shell: true,
+	});
 
-    mediaServer.stdout.on('data', async (rawData) => {
-        rawData = `${rawData}`
+	mediaServer.stdout.on('data', (rawData) => {
+		rawData = `${rawData}`;
 
-        if (
-            rawData.includes('end of file') ||
-            rawData.includes('pusher session timeout') ||
-            rawData.includes('no such stream')
-        ) {
-            const filteredData = rawData
-                .split(' ')
-                .find(
-                    (str) =>
-                        str.includes('__defaultVhost__') &&
-                        (str.includes('RTSP') || str.includes('rtsp') || str.includes('rtmp'))
-                )
+		if (
+			// rawData.includes('no such stream') ||
+			rawData.includes('end of file') ||
+			rawData.includes('pusher session timeout')
+		) {
+			const filteredData = rawData
+				.split(' ')
+				.find(
+					(str) =>
+						str.includes('__defaultVhost__') &&
+						(str.includes('RTSP') ||
+							str.includes('rtsp') ||
+							str.includes('rtmp'))
+				);
 
-            if (filteredData) {
-                const rtsp = config.allRtspList
-                    .filter((rtsp) => rtsp.split('@').pop().match(/\d/g).join('') == filteredData.match(/\d/g).join(''))
-                    .join(' ')
-                const ip = rtsp.split('@').pop()
+			if (filteredData) {
+				const rtsp = config.allRtspList
+					.filter(
+						(rtsp) =>
+							rtsp
+								.split('@')
+								.pop()
+								.split('/')
+								.shift()
+								.match(/\d/g)
+								.join('') == filteredData.match(/\d/g).join('')
+					)
+					.join(' ');
 
-                // RTSP reconnection mechanism.
-                if (config.h264RtspList.includes(rtsp)) {
-                    await RTSPToRTSP(rtsp, 'h264')
-                } else if (config.hevcRtspList.includes(rtsp)) {
-                    await RTSPToRTSP(rtsp, 'hevc')
-                }
+				// RTSP reconnection mechanism.
+				if (config.h264RtspList.includes(rtsp)) {
+					RTSPToRTSP(rtsp, 'h264');
+				} else if (config.hevcRtspList.includes(rtsp)) {
+					RTSPToRTSP(rtsp, 'hevc');
+				}
 
-                RTSPToMP4(rtsp)
-            }
-        }
-    })
+				RTSPToMP4(rtsp);
+			}
+		}
+	});
 
-    if (config.h264RtspList.length > 0) {
-        config.h264RtspList.forEach((rtsp) => {
-            RTSPToRTSP(rtsp, 'h264')
-        })
-    }
+	if (config.h264RtspList.length > 0) {
+		config.h264RtspList.forEach((rtsp) => {
+			RTSPToRTSP(rtsp, 'h264');
+		});
+	}
 
-    if (config.hevcRtspList.length > 0) {
-        config.hevcRtspList.forEach((rtsp) => {
-            RTSPToRTSP(rtsp, 'hevc')
-        })
-    }
+	if (config.hevcRtspList.length > 0) {
+		config.hevcRtspList.forEach((rtsp) => {
+			RTSPToRTSP(rtsp, 'hevc');
+		});
+	}
 }
 
 /*
     Start the backup mechanism.
 */
 function runBackup() {
-    config.allRtspList.forEach((rtsp) => {
-        RTSPToMP4(rtsp)
-    })
+	config.allRtspList.forEach((rtsp) => {
+		RTSPToMP4(rtsp);
+	});
 }
 
 /*
     Periodically clear backups that are one month overdue.
 */
 function clearExpiredBackup() {
-    const clientList = config.clientList.map((client) => client.clientName)
-    const expireLimitDays = 30
-    for (const client of clientList) {
-        fs.readdir(`${backupPath}/${client}/backup`, (err, dates) => {
-            if (err) throw err
+	const clientList = config.clientList.map((client) => client.clientName);
+	const expireLimitDays = 30;
+	for (const client of clientList) {
+		fs.readdir(`${backupPath}/${client}/backup`, (err, dates) => {
+			if (err) throw err;
 
-            dates.forEach((date) => {
-                const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
-                const currentDate = now.toISOString().replace(/\:+/g, '-').slice(0, 10)
-                let dateDiff = parseInt(Math.abs(new Date(currentDate) - new Date(date)) / 1000 / 60 / 60 / 24)
+			dates.forEach((date) => {
+				const now = new Date(
+					new Date().getTime() -
+						new Date().getTimezoneOffset() * 60000
+				);
+				const currentDate = now
+					.toISOString()
+					.replace(/\:+/g, '-')
+					.slice(0, 10);
+				let dateDiff = parseInt(
+					Math.abs(new Date(currentDate) - new Date(date)) /
+						1000 /
+						60 /
+						60 /
+						24
+				);
 
-                if (dateDiff > expireLimitDays)
-                    fs.rmSync(`${backupPath}/${client}/backup/${date}`, { recursive: true, force: true })
-            })
-        })
-    }
+				if (dateDiff > expireLimitDays)
+					fs.rmSync(`${backupPath}/${client}/backup/${date}`, {
+						recursive: true,
+						force: true,
+					});
+			});
+		});
+	}
 }
 
-app.use(cors())
-app.use(express.json())
-app.use(express.static(__dirname))
+app.use(cors());
+app.use(express.json());
+app.use(express.static(__dirname));
 
-app.post('/updateClientList', cors('https://stream.ginibio.com/'), (req, res) => {
-    const { data } = req.body
-    try {
-        JSON.parse(data)
-        fs.writeFile(clientListPath, data, (err) => {
-            if (err) throw err
+app.get(
+	'/forceReloadSystem',
+	cors('https://stream.ginibio.com/'),
+	(req, res) => {
+		try {
+			// Force reload main process.
+			spawn(`${pm2Path} reload nvr --force`, {
+				shell: true,
+			});
 
-            setRtspList()
-            runMediaServer()
-            runBackup()
-        })
-        res.send('success')
-    } catch (err) {
-        res.send(err.message)
-        return
-    }
-})
+			res.send('success');
+		} catch (err) {
+			console.log(err);
+			res.send(err.message);
+			return;
+		}
+	}
+);
+
+app.post(
+	'/updateClientList',
+	cors('https://stream.ginibio.com/'),
+	(req, res) => {
+		const { data } = req.body;
+		try {
+			JSON.parse(data);
+			fs.writeFile(clientListPath, data, (err) => {
+				if (err) throw err;
+
+				// Terminate all processes related to ffmpeg and media server.
+				const killProcesses = spawn('killall -9 ffmpeg MediaServer', {
+					shell: true,
+				});
+
+				killProcesses.on('close', (code) => {
+					// Terminate all zombie processes.
+					const killZombieProcesses = spawn(
+						`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
+						{
+							shell: true,
+						}
+					);
+
+					killZombieProcesses.on('close', (code) => {
+						setRtspList();
+						runMediaServer();
+						runBackup();
+					});
+				});
+			});
+			res.send('success');
+		} catch (err) {
+			res.send(err.message);
+			return;
+		}
+	}
+);
 
 /*
     Run all necessary processes.
 */
 server.listen(port, () => {
-    console.log(`https://stream.ginibio.com/nvr`)
+	console.log(`https://stream.ginibio.com/nvr`);
 
-    setRtspList()
-    runMediaServer()
-    runBackup()
-    setInterval(
-        (function backup() {
-            clearExpiredBackup()
-            return backup
-        })(),
-        1000 * 60 * 5 // Capture stream fragments every five minutes.
-    )
-})
+	setTimeout(() => {
+		setRtspList();
+		runMediaServer();
+		runBackup();
+		setInterval(
+			(function backup() {
+				clearExpiredBackup();
+				return backup;
+			})(),
+			1000 * 60 * 5
+		);
+	}, 1000 * 10); // Buffer time reserved for reboot.
+});
 
 /* 
     When the program terminates, clear the related background programs.
 */
 process.on('SIGINT', (code) => {
-    String('SIGINT')
-        .split('')
-        .forEach((word) => {
-            const slashes = String('|').repeat(30)
-            console.log(`${slashes} ${word} ${slashes}`)
-        })
+	String('SIGINT')
+		.split('')
+		.forEach((word) => {
+			const slashes = String('|').repeat(30);
+			console.log(`${slashes} ${word} ${slashes}`);
+		});
 
-    // Terminate all processes related to ffmpeg and media server.
-    const killProcesses = spawn('killall -9 ffmpeg MediaServer', {
-        shell: true,
-    })
+	// Terminate all processes related to ffmpeg and media server.
+	const killProcesses = spawn('killall -9 ffmpeg MediaServer', {
+		shell: true,
+	});
 
-    killProcesses.on('close', (code) => {
-        // Terminate all zombie processes.
-        const killZombieProcesses = spawn(`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`, {
-            shell: true,
-        })
-
-        killZombieProcesses.on('close', (code) => {
-            // setRtspList()
-            // runMediaServer()
-            // runBackup()
-        })
-    })
-})
+	// Terminate all zombie processes.
+	const killZombieProcesses = spawn(
+		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
+		{
+			shell: true,
+		}
+	);
+});

@@ -1,149 +1,162 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>NVR</title>
-        <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.min.js"></script>
-        <script src="./nvr/lib/jessibuca-pro.js"></script>
-    </head>
-    <body>
-        <div id="app">
-            <main-component></main-component>
-        </div>
-        <script type="module">
-            import clientList from './client-list/client-list.json' assert { type: 'json' }
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>NVR</title>
+		<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.min.js"></script>
+		<script src="./nvr/lib/jessibuca-pro.js"></script>
+	</head>
+	<body>
+		<div id="app">
+			<main-component></main-component>
+		</div>
+		<script type="module">
+			import clientList from './client-list/client-list.json' assert { type: 'json' };
 
-            setInterval(() => location.reload(), 1000 * 60 * 30) // Reload page automatically.
-            setInterval(() => console.clear(), 0) // Clear log endlessly.
+			setInterval(() => location.reload(), 1000 * 60 * 30); // Reload page automatically.
+			// setInterval(() => console.clear(), 0); // Clear log endlessly.
 
-            const segmentInSeconds = 300
-            const h264ClientList =
-                clientList.h264ClientList.length > 0
-                    ? clientList.h264ClientList
-                          .map((client) => client.rtspList)
-                          .reduce((prev, curr) => prev.concat(curr))
-                    : []
-            const hevcClientList =
-                clientList.hevcClientList.length > 0
-                    ? clientList.hevcClientList
-                          .map((client) => client.rtspList)
-                          .reduce((prev, curr) => prev.concat(curr))
-                    : []
-            const urlList = h264ClientList.concat(hevcClientList).map((rtsp) => rtsp.split('@').pop())
-            const wssUrlList = urlList.map((url) => `wss://stream.ginibio.com/live/${url}.live.flv`)
-            const app = Vue.createApp({})
+			const segmentInSeconds = 300;
+			const h264ClientList =
+				clientList.h264ClientList.length > 0
+					? clientList.h264ClientList
+							.map((client) => client.rtspList)
+							.reduce((prev, curr) => prev.concat(curr))
+					: [];
+			const hevcClientList =
+				clientList.hevcClientList.length > 0
+					? clientList.hevcClientList
+							.map((client) => client.rtspList)
+							.reduce((prev, curr) => prev.concat(curr))
+					: [];
+			const urlList = h264ClientList
+				.concat(hevcClientList)
+				.map((rtsp) => rtsp.split('@').pop().split('/').shift());
+			const wssUrlList = urlList.map(
+				(url) => `wss://stream.ginibio.com/live/${url}.live.flv`
+			);
+			const app = Vue.createApp({});
 
-            app.component('main-component', {
-                template: `
+			app.component('main-component', {
+				template: `
                             <div class="grid">
                                 <div class="flex" v-for="(url, index) in urlList">
-                                    <div class="title">{{url.split('@').pop()}}</div>
+                                    <div class="title">{{url.split('@').pop().split('/').shift()}}</div>
                                     <div class="container" :ref="(el) => { containerList.push(el) }"></div>
                                 </div>
                             </div>
                         `,
-                data() {
-                    return {
-                        urlList: urlList,
-                        containerList: [],
-                        players: {},
-                    }
-                },
-                mounted() {
-                    this.initializePlayers()
-                },
-                methods: {
-                    getPlayer(container) {
-                        return new JessibucaPro({
-                            decoder: './lib/decoder-pro-simd.js',
-                            container: container,
-                            videoBuffer: 0.2,
-                            videoBufferDelay: 1,
-                            isResize: true,
-                            isFlv: true,
-                            hasAudio: false,
-                            debug: false,
-                            loadingText: '',
-                            showBandwidth: false,
-                            timeout: 10,
-                            heartTimeout: 10,
-                            loadingTimeout: 10,
-                            heartTimeoutReplayTimes: -1,
-                            loadingTimeoutReplayTimes: -1,
-                            supportDblclickFullscreen: true,
-                            useWCS: true,
-                            useMSE: true,
-                            useSIMD: true,
-                            operateBtns: {
-                                fullscreen: false,
-                                screenshot: false,
-                                play: false,
-                                audio: false,
-                            },
-                        })
-                    },
-                    replay(player, container, wssUrl) {
-                        player.pause()
+				data() {
+					return {
+						urlList: urlList,
+						containerList: [],
+						players: {},
+					};
+				},
+				mounted() {
+					this.initializePlayers();
+				},
+				methods: {
+					getPlayer(container) {
+						return new JessibucaPro({
+							decoder: './nvr/lib/decoder-pro-simd.js',
+							container: container,
+							videoBuffer: 0.2,
+							videoBufferDelay: 1,
+							isResize: true,
+							isFlv: true,
+							hasAudio: false,
+							debug: false,
+							loadingText: '',
+							showBandwidth: false,
+							timeout: 15,
+							heartTimeout: 15,
+							loadingTimeout: 15,
+							heartTimeoutReplayTimes: -1,
+							loadingTimeoutReplayTimes: -1,
+							supportDblclickFullscreen: true,
+							useSIMD: true,
+							operateBtns: {
+								fullscreen: false,
+								screenshot: false,
+								play: false,
+								audio: false,
+							},
+						});
+					},
+					replay(player, container, wssUrl) {
+						player.pause();
 
-                        if (player) {
-                            player.destroy()
-                        }
+						if (player) {
+							player.destroy();
+						}
 
-                        player = this.getPlayer(container)
+						player = this.getPlayer(container);
 
-                        setTimeout(function () {
-                            player.play(wssUrl)
-                        }, 150)
-                    },
-                    initializePlayers() {
-                        wssUrlList.forEach((wssUrl, index) => {
-                            this.players[index] = this.getPlayer(this.containerList[index])
+						setTimeout(function () {
+							player.play(wssUrl);
+						}, 150);
+					},
+					initializePlayers() {
+						wssUrlList.forEach((wssUrl, index) => {
+							this.players[index] = this.getPlayer(
+								this.containerList[index]
+							);
 
-                            this.players[index].on('timeout', (error) => {
-                                this.replay(this.players[index], this.containerList[index], wssUrl)
-                            })
+							this.players[index].on('timeout', (error) => {
+								this.replay(
+									this.players[index],
+									this.containerList[index],
+									wssUrl
+								);
+							});
 
-                            this.players[index].on('error', (error) => {
-                                this.replay(this.players[index], this.containerList[index], wssUrl)
-                            })
+							this.players[index].on('error', (error) => {
+								this.replay(
+									this.players[index],
+									this.containerList[index],
+									wssUrl
+								);
+							});
 
-                            this.players[index] && this.players[index].play(wssUrl)
-                        })
-                    },
-                },
-            })
+							this.players[index] &&
+								this.players[index].play(wssUrl);
+						});
+					},
+				},
+			});
 
-            app.mount('#app')
-        </script>
-        <style scoped>
-            body {
-                margin: 0;
-                background-color: black;
-            }
-            body::-webkit-scrollbar {
-                display: none;
-            }
-            .grid {
-                display: grid;
-                grid-template-columns: auto auto auto;
-                height: 100vh;
-            }
-            .flex {
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                height: 33.3vh;
-            }
-            .title {
-                display: block;
-                font-size: 1.5em;
-                font-weight: bold;
-                color: white;
-                margin: 0.5em 0em 0.5em 0em;
-            }
-        </style>
-    </body>
+			app.mount('#app');
+		</script>
+		<style scoped>
+			body {
+				margin: 0;
+				background-color: black;
+			}
+			body::-webkit-scrollbar {
+				display: none;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: auto auto auto;
+				height: 100vh;
+			}
+			.flex {
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				height: 33.3vh;
+			}
+			.title {
+				display: block;
+				font-size: 1.5em;
+				font-weight: bold;
+				color: white;
+				margin: 0.5em 0em 0.5em 0em;
+			}
+		</style>
+	</body>
 </html>
