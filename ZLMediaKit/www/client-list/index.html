@@ -50,7 +50,8 @@
 					updateClientList: function () {
 						axios
 							.post(
-								'https://stream.ginibio.com:3000/updateClientList',
+								// 'http://your_local_ip:3000/updateClientList', // HTTP
+								'https://stream.ginibio.com:3000/updateClientList', // HTTPS
 								{ data: this.value }
 							)
 							.then((res) => {
@@ -77,8 +78,8 @@
 					forceReloadSystem: function () {
 						axios
 							.get(
-								'https://stream.ginibio.com:3000/forceReloadSystem',
-								{ data: this.value }
+								// 'http://your_local_ip:3000/forceReloadSystem' // HTTP
+								'https://stream.ginibio.com:3000/forceReloadSystem' // HTTPS
 							)
 							.then((res) => {
 								const { data } = res;
