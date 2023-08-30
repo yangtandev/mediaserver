@@ -22,19 +22,27 @@ const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer';
 
 	mediaServer.stdout.on('data', (rawData) => {
 		rawData = `${rawData}`;
-		console.log(rawData);
+
+		if (rawData.includes('__defaultVhost__')) {
+			console.log(rawData);
+		}
 
 		if (
-			// rawData.includes('no such stream') ||
-			rawData.includes('end of file') ||
-			rawData.includes('pusher session timeout')
+			rawData.includes('断开') &&
+			!(
+				rawData.includes('no such stream') ||
+				rawData.includes('end of file') ||
+				rawData.includes('媒体注销')
+			)
 		) {
 			const data = rawData
 				.split(' ')
 				.find(
 					(str) =>
 						str.includes('__defaultVhost__') &&
-						(str.includes('RTSP') || str.includes('rtsp'))
+						(str.includes('RTSP') ||
+							str.includes('rtsp') ||
+							str.includes('rtmp'))
 				);
 
 			if (data) {

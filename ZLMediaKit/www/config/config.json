@@ -1,15 +1,24 @@
 {
-	"h264ClientList": [
+	"rtmpClientList": [
 		{
 			"clientName": "gini",
-			"rtspList": ["rtsp://admin:KT91888619@192.168.2.58:554"]
+			"rtmpList": ["rtmp://stream.ginibio.com:1935/live/test"]
 		}
 	],
-	"hevcClientList": [
+	"h264RtspClientList": [
 		{
 			"clientName": "gini",
 			"rtspList": [
 				"rtsp://admin:!QAZ2wsx87518499@192.168.2.51:554",
+				"rtsp://admin:KT91888619@192.168.2.58:554/stream3",
+				"rtsp://admin:!QAZ87518499@192.168.2.61:554"
+			]
+		}
+	],
+	"hevcRtspClientList": [
+		{
+			"clientName": "gini",
+			"rtspList": [
 				"rtsp://admin:!QAZ87518499@192.168.2.53:554",
 				"rtsp://admin:AB87518499@192.168.2.57:554/stream1",
 				"rtsp://admin:!QAZ2wsx87518499@192.168.2.59:554",

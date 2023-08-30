@@ -23,6 +23,17 @@
     (FFMpeg 安裝可參考: https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/ffmpeg-with-nvidia-gpu/index.html)
 -   ZLMediaKit: Latest version  
     (進入 $home/NVR/ZLMediaKit，並按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
+-   Nginx: Latest version ( For HTTPS )  
+    (Nginx 安裝可參考: https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-ubuntu-22-04)
+-   Certbot: Latest version ( For HTTPS )  
+    (Certbot 安裝及申請憑證可參考: https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal 。安裝完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:  
+    &emsp;location / {  
+    &emsp;&emsp;proxy_pass https://localhost:9443;  
+    &emsp;&emsp;proxy_set_header X-Real-IP $remote_addr;  
+    &emsp;&emsp;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  
+    &emsp;&emsp;proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;  
+    &emsp;}  
+    )
 
 ## 啟動程式
 
@@ -31,17 +42,17 @@
 
 ## 功能介紹
 
-1. 自訂的客戶列表: 可按照需求加入客戶的攝影機串流資訊，包括 RTMP、RTSP(H264 或 HEVC)等協議。  
-   (https://stream.ginibio.com/client-list 或 http://your_local_ip:9080/client-list)
+1. 自訂的客戶列表: 可按照需求加入客戶的攝影機串流資訊，支援包括 RTMP、RTSP( H264 及 HEVC )等協議。  
+   (https://example.com/config 或 http://localhost:9080/config)
 2. 自動影像串流備分: 按日期、客戶作分類，可依需求線上瀏覽或直接下載影像檔。  
-   (https://stream.ginibio.com/客戶名/backup 或 http://your_local_ip:9080/客戶名/backup)
-3. NVR 即時影像串流預覽: 可觀看註冊於 client-list 頁中的客戶的攝影機影像串流。  
-   (https://stream.ginibio.com/nvr 或 http://your_local_ip:9080/nvr)
+   (https://example.com/your_client_name/backup 或 http://localhost:9080/your_client_name/backup)
+3. NVR 即時影像串流預覽: 可觀看註冊於 config 頁中的客戶的攝影機影像串流。  
+   (https://example.com/nvr 或 http://localhost:9080/nvr)
 
 ## 備註
 
-如需切換成 HTTP 協議，可直接於下列路徑的檔案中，將註解為 // HTTP 的代碼開啟，同時註解掉 // HTTPS 的代碼，最後於終端機使用指令 "pm2 reload nvr" 以重整系統:
+如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"isHttps"設置為"true"，最後使用終端機輸入指令 "pm2 reload nvr" 以重整系統:
 
 -   $HOME/NVR/index.js
 -   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/nvr/index.html
--   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/client-list/index.html
+-   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/config/index.html

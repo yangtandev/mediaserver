@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Client List</title>
+		<title>Config</title>
 		<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 	</head>
@@ -13,14 +13,14 @@
 			<main-component></main-component>
 		</div>
 		<script type="module">
-			import clientList from './client-list/client-list.json' assert { type: 'json' };
+			import clientList from './config/config.json' assert { type: 'json' };
 
 			const app = Vue.createApp({});
 
 			app.component('main-component', {
 				template: `
                     <textarea ref="textarea" :style="{'height': height}" v-model="value" class="textarea"></textarea>
-                    <button @click="updateClientList" class="button">Update Client List</button>
+                    <button @click="updateConfig" class="button">Update Config</button>
                     <button @click="forceReloadSystem" class="button">Force Reload System</button>
                 `,
 				data() {
@@ -47,11 +47,11 @@
 						}
 						this.height = `${count * 20}px`;
 					},
-					updateClientList: function () {
+					updateConfig: function () {
 						axios
 							.post(
-								// 'http://your_local_ip:3000/updateClientList', // HTTP
-								'https://stream.ginibio.com:3000/updateClientList', // HTTPS
+								// 'http://your_local_ip:3000/updateConfig', // HTTP
+								'https://stream.ginibio.com:3000/updateConfig', // HTTPS
 								{ data: this.value }
 							)
 							.then((res) => {

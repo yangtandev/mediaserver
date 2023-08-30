@@ -13,7 +13,7 @@
 			<main-component></main-component>
 		</div>
 		<script type="module">
-			import clientList from './client-list/client-list.json' assert { type: 'json' };
+			import clientList from './config/config.json' assert { type: 'json' };
 
 			setInterval(() => location.reload(), 1000 * 60 * 30); // Reload page automatically.
 			// setInterval(() => console.clear(), 0); // Clear log endlessly.
@@ -76,10 +76,8 @@
 				methods: {
 					play(index) {
 						const playerList = this.$options.playerList;
-						setTimeout(
-							() => playerList[index].play(wssUrlList[index]),
-							10
-						);
+
+						playerList[index].play(wssUrlList[index]);
 					},
 					create(index) {
 						const playerList = this.$options.playerList;
