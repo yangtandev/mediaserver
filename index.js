@@ -1,35 +1,28 @@
-/* 
-    Express.js & Node.js
-*/
-const { spawn } = require('child_process');
-const http = require('https');
-const https = require('https');
-const fs = require('fs');
-const express = require('express');
-const cors = require('cors');
-const app = express();
-const domainName = 'stream.ginibio.com'; // Replace it with your registered domain name.
-const isHTTPS = false; // If you need to use HTTPS, please change it to true
-const server = isHTTPS
-	? https.createServer(
+const HTTP = require('http');
+const HTTPS = require('https');
+const FS = require('fs');
+const SPAWN = require('child_process').spawn;
+const EXPRESS = require('express');
+const CORS = require('cors');
+const APP = EXPRESS();
+const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
+const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
+const SERVER = IS_HTTPS
+	? HTTPS.createServer(
 			{
-				key: fs.readFileSync(
-					`/etc/letsencrypt/live/${domainName}/privkey.pem`,
+				key: FS.readFileSync(
+					`/etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem`,
 					'utf8'
 				),
-				cert: fs.readFileSync(
-					`/etc/letsencrypt/live/${domainName}/fullchain.pem`,
+				cert: FS.readFileSync(
+					`/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem`,
 					'utf8'
 				),
 			},
-			app
+			APP
 	  )
-	: http.createServer(app);
-const port = 3000;
-
-/* 
-    Global Variables
-*/
+	: HTTP.createServer(APP);
+const PORT = 3000;
 const RTMP_COMMANDS = {};
 const RTSP_COMMANDS = {};
 const MP4_COMMANDS = {};
@@ -84,7 +77,7 @@ function RTMPToRTSP(rtmp) {
 		.on('error', function (err, stdout, stderr) {
 			if (
 				// err.message.includes('5XX Server Error reply') ||
-				err.message.includes('Connection refused') ||
+				// err.message.includes('Connection refused') ||
 				err.message.includes('Conversion failed') ||
 				err.message.includes('Connection timed out') ||
 				err.message.includes('No route to host') ||
@@ -212,8 +205,8 @@ function RTSPToMP4(rtsp) {
 
 	for (let path of [clientName, 'backup', today, ip]) {
 		output += `/${path}`;
-		if (!fs.existsSync(output)) {
-			fs.mkdirSync(output);
+		if (!FS.existsSync(output)) {
+			FS.mkdirSync(output);
 		}
 	}
 
@@ -279,7 +272,7 @@ function RTSPToMP4(rtsp) {
     Set rtsp list related variables.
 */
 function setRtspList() {
-	const source = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+	const source = JSON.parse(FS.readFileSync(CONFIG_PATH, 'utf8'));
 	const typeList = ['rtmp', 'h264Rtsp', 'hevcRtsp'];
 	CONFIG = JSON.parse(JSON.stringify(source));
 	CONFIG[`clientList`] = [];
@@ -314,7 +307,7 @@ function clearExpiredBackup() {
 	const clientList = CONFIG[`clientList`].map((client) => client.clientName);
 	const expireLimitDays = 30;
 	for (const client of clientList) {
-		fs.readdir(`${BACKUP_PATH}/${client}/backup`, (err, dates) => {
+		FS.readdir(`${BACKUP_PATH}/${client}/backup`, (err, dates) => {
 			if (err) throw err;
 
 			dates.forEach((date) => {
@@ -335,7 +328,7 @@ function clearExpiredBackup() {
 				);
 
 				if (dateDiff > expireLimitDays)
-					fs.rmSync(`${BACKUP_PATH}/${client}/backup/${date}`, {
+					FS.rmSync(`${BACKUP_PATH}/${client}/backup/${date}`, {
 						recursive: true,
 						force: true,
 					});
@@ -373,40 +366,35 @@ function runProcesses() {
 	}
 }
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
+APP.use(CORS());
+APP.use(EXPRESS.json());
+APP.use(EXPRESS.static(__dirname));
 
-app.get(
-	'/forceReloadSystem',
-	cors('https://stream.ginibio.com/'),
-	(req, res) => {
-		try {
-			// Force reload main process.
-			spawn(`${PM2_PATH} reload nvr --force`, { shell: true });
+APP.get('/forceReloadSystem', (req, res) => {
+	try {
+		SPAWN(`${PM2_PATH} reload nvr --force`, { shell: true });
 
-			res.send('success');
-		} catch (err) {
-			console.log(err);
+		res.send('success');
+	} catch (err) {
+		console.log(err);
 
-			res.send(err.message);
-			return;
-		}
+		res.send(err.message);
+		return;
 	}
-);
+});
 
-app.post('/updateConfig', cors('https://stream.ginibio.com/'), (req, res) => {
+APP.post('/updateConfig', (req, res) => {
 	const { data } = req.body;
 	try {
 		JSON.parse(data);
 
-		fs.writeFile(CONFIG_PATH, data, (err) => {
+		FS.writeFile(CONFIG_PATH, data, (err) => {
 			if (err) throw err;
 
 			// Terminate all processes related to ffmpeg, media server and zombie processes.
-			const killFFMPEG = spawn('killall -9 ffmpeg', { shell: true });
+			const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
 
-			const killZombieProcesses = spawn(
+			const killZombieProcesses = SPAWN(
 				`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 				{ shell: true }
 			);
@@ -422,7 +410,7 @@ app.post('/updateConfig', cors('https://stream.ginibio.com/'), (req, res) => {
 	}
 });
 
-app.post('/reloadFFmpeg', cors('https://stream.ginibio.com/'), (req, res) => {
+APP.post('/reloadFFmpeg', (req, res) => {
 	const { data } = req.body;
 
 	console.log(data);
@@ -456,7 +444,7 @@ app.post('/reloadFFmpeg', cors('https://stream.ginibio.com/'), (req, res) => {
 	}
 });
 
-server.listen(port, () => {
+SERVER.listen(PORT, () => {
 	setTimeout(() => {
 		setRtspList();
 		runProcesses();
@@ -475,9 +463,9 @@ process.on('SIGINT', (code) => {
 			console.log(`${slashes} ${word} ${slashes}`);
 		});
 
-	const killFFMPEG = spawn('killall -9 ffmpeg', { shell: true });
+	const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
 
-	const killZombieProcesses = spawn(
+	const killZombieProcesses = SPAWN(
 		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 		{ shell: true }
 	);

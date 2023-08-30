@@ -13,19 +13,21 @@
 			<main-component></main-component>
 		</div>
 		<script type="module">
-			import clientList from './config/config.json' assert { type: 'json' };
+			import CLIENT_LIST from './config/config.json' assert { type: 'json' };
 
-			const app = Vue.createApp({});
+			const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
+			const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
+			const APP = Vue.createApp({});
 
-			app.component('main-component', {
+			APP.component('main-component', {
 				template: `
-                    <textarea ref="textarea" :style="{'height': height}" v-model="value" class="textarea"></textarea>
-                    <button @click="updateConfig" class="button">Update Config</button>
-                    <button @click="forceReloadSystem" class="button">Force Reload System</button>
-                `,
+			                 <textarea ref="textarea" :style="{'height': height}" v-model="value" class="textarea"></textarea>
+			                 <button @click="updateConfig" class="button">Update Config</button>
+			                 <button @click="forceReloadSystem" class="button">Force Reload System</button>
+			             `,
 				data() {
 					return {
-						value: JSON.stringify(clientList, null, 4),
+						value: JSON.stringify(CLIENT_LIST, null, 4),
 						height: '16px',
 					};
 				},
@@ -48,12 +50,11 @@
 						this.height = `${count * 20}px`;
 					},
 					updateConfig: function () {
+						const url = IS_HTTPS
+							? `https://${DOMAIN_NAME}:3000/updateConfig`
+							: 'http://localhost:3000/updateConfig';
 						axios
-							.post(
-								// 'http://your_local_ip:3000/updateConfig', // HTTP
-								'https://stream.ginibio.com:3000/updateConfig', // HTTPS
-								{ data: this.value }
-							)
+							.post(url, { data: this.value })
 							.then((res) => {
 								const { data } = res;
 								if (data) {
@@ -76,11 +77,12 @@
 							});
 					},
 					forceReloadSystem: function () {
+						const url = IS_HTTPS
+							? `https://${DOMAIN_NAME}:3000/forceReloadSystem`
+							: 'http://192.168.2.205:3000/forceReloadSystem';
+
 						axios
-							.get(
-								// 'http://your_local_ip:3000/forceReloadSystem' // HTTP
-								'https://stream.ginibio.com:3000/forceReloadSystem' // HTTPS
-							)
+							.get(url)
 							.then((res) => {
 								const { data } = res;
 								if (data) {
@@ -100,7 +102,7 @@
 				},
 			});
 
-			app.mount('#app');
+			APP.mount('#app');
 		</script>
 		<style scoped>
 			.textarea {

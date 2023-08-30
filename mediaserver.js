@@ -1,22 +1,16 @@
-/* 
-    Express.js & Node.js
-*/
-const { spawn } = require('child_process');
-const fetch = (...args) =>
+const SPAWN = require('child_process').spawn;
+const FETCH = (...args) =>
 	import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
+const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
+const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
+const SSL_PATH = './certificates/ssl.pem';
 
-/*
-    Paths
-*/
-const pm2Path = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`;
-const sslPath = './certificates/ssl.pem';
-const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer';
-
-/*
-    Run media server。
-*/
 (function runMediaServer() {
-	const mediaServer = spawn(`${mediaServerPath} -s ${sslPath}`, {
+	const command = IS_HTTPS
+		? `${MEDIA_SERVER_PATH} -s ${SSL_PATH}`
+		: `${MEDIA_SERVER_PATH}`;
+	const mediaServer = SPAWN(command, {
 		shell: true,
 	});
 
@@ -49,14 +43,14 @@ const mediaServerPath = './ZLMediaKit/release/linux/Debug/MediaServer';
 				const body = {
 					data: data,
 				};
-				const response = fetch(
-					'https://stream.ginibio.com:3000/reloadFFmpeg',
-					{
-						method: 'POST',
-						body: JSON.stringify(body),
-						headers: { 'Content-Type': 'application/json' },
-					}
-				);
+				const url = IS_HTTPS
+					? `https://${DOMAIN_NAME}:3000/reloadFFmpeg`
+					: `http://localhost:3000/reloadFFmpeg`;
+				const response = FETCH(url, {
+					method: 'POST',
+					body: JSON.stringify(body),
+					headers: { 'Content-Type': 'application/json' },
+				});
 			}
 		}
 	});
@@ -74,12 +68,12 @@ process.on('SIGINT', (code) => {
 		});
 
 	// Terminate all processes related to media server.
-	const killProcesses = spawn('killall -1 MediaServer', {
+	const killProcesses = SPAWN('killall -1 MediaServer', {
 		shell: true,
 	});
 
 	// Terminate all zombie processes.
-	const killZombieProcesses = spawn(
+	const killZombieProcesses = SPAWN(
 		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 		{
 			shell: true,

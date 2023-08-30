@@ -26,14 +26,14 @@
 -   Nginx: Latest version ( For HTTPS )  
     (Nginx 安裝可參考: https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-ubuntu-22-04)
 -   Certbot: Latest version ( For HTTPS )  
-    (Certbot 安裝及申請憑證可參考: https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal 。安裝完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:  
+    (Certbot 安裝及申請憑證可參考: https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal 。完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:  
     &emsp;location / {  
     &emsp;&emsp;proxy_pass https://localhost:9443;  
     &emsp;&emsp;proxy_set_header X-Real-IP $remote_addr;  
     &emsp;&emsp;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  
     &emsp;&emsp;proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;  
     &emsp;}  
-    )
+    最後使用終端機輸入"sudo /etc/init.d/nginx restart" 以重啟 Nginx，並使新配置生效。)
 
 ## 啟動程式
 
@@ -51,8 +51,9 @@
 
 ## 備註
 
-如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"isHttps"設置為"true"，最後使用終端機輸入指令 "pm2 reload nvr" 以重整系統:
+如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"IS_HTTPS"設置為"true"，最後使用終端機輸入指令 "pm2 reload nvr" 以重整系統:
 
 -   $HOME/NVR/index.js
+-   $HOME/NVR/mediaserver.js
 -   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/nvr/index.html
 -   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/config/index.html

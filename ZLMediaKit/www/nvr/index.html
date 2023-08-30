@@ -13,48 +13,50 @@
 			<main-component></main-component>
 		</div>
 		<script type="module">
-			import clientList from './config/config.json' assert { type: 'json' };
+			import CLIENT_LIST from './config/config.json' assert { type: 'json' };
 
 			setInterval(() => location.reload(), 1000 * 60 * 30); // Reload page automatically.
 			// setInterval(() => console.clear(), 0); // Clear log endlessly.
 
-			const segmentInSeconds = 300;
-			const rtmpClientList =
-				clientList.rtmpClientList.length > 0
-					? clientList.rtmpClientList
+			const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
+			const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
+			const RTMP_CLIENT_LIST =
+				CLIENT_LIST['rtmpClientList'].length > 0
+					? CLIENT_LIST['rtmpClientList']
 							.map((client) => client.rtmpList)
 							.reduce((prev, curr) => prev.concat(curr))
 							.map((rtmp) => rtmp.split('/').pop())
 					: [];
-			const h264RtspClientList =
-				clientList.h264RtspClientList.length > 0
-					? clientList.h264RtspClientList
+			const H264_RTSP_CLIENT_LIST =
+				CLIENT_LIST['h264RtspClientList'].length > 0
+					? CLIENT_LIST['h264RtspClientList']
 							.map((client) => client.rtspList)
 							.reduce((prev, curr) => prev.concat(curr))
 							.map((rtsp) =>
 								rtsp.split('@').pop().split('/').shift()
 							)
 					: [];
-			const hevcRtspClientList =
-				clientList.hevcRtspClientList.length > 0
-					? clientList.hevcRtspClientList
+			const HEVC_RTSP_CLIENT_LIST =
+				CLIENT_LIST['hevcRtspClientList'].length > 0
+					? CLIENT_LIST['hevcRtspClientList']
 							.map((client) => client.rtspList)
 							.reduce((prev, curr) => prev.concat(curr))
 							.map((rtsp) =>
 								rtsp.split('@').pop().split('/').shift()
 							)
 					: [];
-			const urlList = rtmpClientList
-				.concat(h264RtspClientList)
-				.concat(hevcRtspClientList);
+			const URL_LIST = RTMP_CLIENT_LIST.concat(
+				H264_RTSP_CLIENT_LIST
+			).concat(HEVC_RTSP_CLIENT_LIST);
 
-			const wssUrlList = urlList.map(
-				// (url) => `ws://your_local_ip:9080/live/${url}.live.flv`// HTTP
-				(url) => `wss://stream.ginibio.com/live/${url}.live.flv` // HTTPS
+			const WSS_LIST = URL_LIST.map((url) =>
+				IS_HTTPS
+					? `wss://${DOMAIN_NAME}/live/${url}.live.flv`
+					: `ws://localhost:9080/live/${url}.live.flv`
 			);
-			const app = Vue.createApp({});
+			const APP = Vue.createApp({});
 
-			app.component('main-component', {
+			APP.component('main-component', {
 				template: `
 			                         <div class="grid">
 			                             <div class="flex" v-for="(url, index) in urlList">
@@ -65,7 +67,7 @@
 			                     `,
 				data() {
 					return {
-						urlList: urlList,
+						urlList: URL_LIST,
 						containerList: [],
 					};
 				},
@@ -77,7 +79,7 @@
 					play(index) {
 						const playerList = this.$options.playerList;
 
-						playerList[index].play(wssUrlList[index]);
+						playerList[index].play(WSS_LIST[index]);
 					},
 					create(index) {
 						const playerList = this.$options.playerList;
@@ -122,11 +124,7 @@
 						});
 					},
 					init() {
-						for (
-							let index = 0;
-							index < wssUrlList.length;
-							index++
-						) {
+						for (let index = 0; index < WSS_LIST.length; index++) {
 							this.create(index);
 							this.play(index);
 						}
@@ -134,7 +132,7 @@
 				},
 			});
 
-			app.mount('#app');
+			APP.mount('#app');
 		</script>
 		<style scoped>
 			body {
