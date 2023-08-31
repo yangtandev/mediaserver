@@ -42,7 +42,7 @@ git clone https://github.com/yangtandev/NVR.git
     }
     ```
 
-    最後，使用終端機輸入以下指令，以使新配置生效。
+    最後，使用終端機輸入以下指令，以使新配置生效:
 
     ```
     sudo /etc/init.d/nginx restart
@@ -68,9 +68,15 @@ pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
 
 ## 備註
 
-如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"IS_HTTPS"設置為"true"，最後使用終端機輸入指令 "pm2 reload nvr" 以重整系統:
+如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"IS_HTTPS"設置為"true":
 
 -   $HOME/NVR/index.js
 -   $HOME/NVR/mediaserver.js
 -   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/nvr/index.html
 -   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/config/index.html
+
+最後，使用終端機輸入以下指令，以使新配置生效:
+
+```
+pm2 reload nvr
+```
