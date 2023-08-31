@@ -42,13 +42,11 @@ git clone https://github.com/yangtandev/NVR.git
     }
     ```
 
-    最後使用終端機輸入以下指令以重啟 Nginx，並使新配置生效。:
+    最後，使用終端機輸入以下指令，以使新配置生效。
 
     ```
     sudo /etc/init.d/nginx restart
     ```
-
-    )
 
 ## 快速開始
 
