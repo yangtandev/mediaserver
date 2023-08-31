@@ -30,7 +30,7 @@ const PM2_PATH = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`;
 const BACKUP_PATH = `./ZLMediaKit/release/linux/Debug/www`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`./nvidia/ffmpeg/ffmpeg`);
+FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
 let CONFIG = {};
 
 /*

@@ -1,5 +1,3 @@
-# 快速開始
-
 ## 建議硬體配置
 
 -   Memory: 16 GB 以上
@@ -9,8 +7,15 @@
 -   OS Name: Ubuntu 22.04.3 LTS
 -   OS Type: 64-bit
 
+## 獲取代碼
+
+```
+git clone https://github.com/yangtandev/NVR.git
+```
+
 ## 環境需求
 
+-   Git: Latest version
 -   Node.js: 14.16.1 (LTS)  
      (請使用 nvm 安裝 Node.js: https://github.com/nvm-sh/nvm)
 -   PM2: Latest version
@@ -26,19 +31,33 @@
 -   Nginx: Latest version ( For HTTPS )  
     (Nginx 安裝可參考: https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-ubuntu-22-04)
 -   Certbot: Latest version ( For HTTPS )  
-    (Certbot 安裝及申請憑證可參考: https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal 。完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:  
-    &emsp;location / {  
-    &emsp;&emsp;proxy_pass https://localhost:9443;  
-    &emsp;&emsp;proxy_set_header X-Real-IP $remote_addr;  
-    &emsp;&emsp;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  
-    &emsp;&emsp;proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;  
-    &emsp;}  
-    最後使用終端機輸入"sudo /etc/init.d/nginx restart" 以重啟 Nginx，並使新配置生效。)
+    (Certbot 安裝及申請憑證可參考: https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal 。完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:
 
-## 啟動程式
+    ```
+    location / {
+        proxy_pass https://localhost:9443;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    }
+    ```
 
--   pm2 start ecosystem.config.js
--   pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
+    最後使用終端機輸入以下指令以重啟 Nginx，並使新配置生效。:
+
+    ```
+    sudo /etc/init.d/nginx restart
+    ```
+
+    )
+
+## 快速開始
+
+```
+cd $HOME/NVR
+npm i
+pm2 start ecosystem.config.js
+pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
+```
 
 ## 功能介紹
 
