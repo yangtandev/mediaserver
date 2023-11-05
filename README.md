@@ -19,13 +19,16 @@ git clone https://github.com/yangtandev/NVR.git
 -   Node.js: 14.16.1 (LTS)  
     請使用 nvm 安裝 Node.js: https://github.com/nvm-sh/nvm
 -   PM2: Latest version
--   NVIDIA Display Driver: 535.86.10
--   CUDA Toolkit: 12.2  
-    NVIDIA Driver & CUDA 安裝可參考: https://jackfrisht.medium.com/install-nvidia-driver-via-ppa-in-ubuntu-18-04-fc9a8c4658b9
+-   NVIDIA Display Driver: 535.86.10 or later  
+    NVIDIA Driver 安裝可參考: https://www.nvidia.com/Download/index.aspx
+-   CUDA Toolkit: 12.2 or later  
+    CUDA 安裝可參考: https://developer.nvidia.com/cuda-downloads
 -   NVIDIA-Patch: Latest version  
     此為破解顯卡影像編碼最大限制的補丁，安裝可參考: https://github.com/keylase/nvidia-patch
 -   FFMpeg: Latest version  
-    安裝可參考: https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/ffmpeg-with-nvidia-gpu/index.html
+    安裝可參考:  
+    https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/ffmpeg-with-nvidia-gpu/index.html
+    https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
 -   ZLMediaKit: Latest version  
     進入 $home/NVR/ZLMediaKit，並按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
 -   Nginx: Latest version ( For HTTPS )  
