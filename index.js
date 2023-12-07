@@ -70,7 +70,7 @@ function RTMPToRTSP(rtmp) {
 			) {
 				setTimeout(() => {
 					RTMPToRTSP(rtmp);
-					RTSPToMP4(rtsp);
+					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -78,6 +78,7 @@ function RTMPToRTSP(rtmp) {
 			if (
 				// err.message.includes('5XX Server Error reply') ||
 				// err.message.includes('Connection refused') ||
+				err.message.includes('Error opening input file') ||
 				err.message.includes('Conversion failed') ||
 				err.message.includes('Connection timed out') ||
 				err.message.includes('No route to host') ||
@@ -88,7 +89,7 @@ function RTMPToRTSP(rtmp) {
 			) {
 				setTimeout(() => {
 					RTMPToRTSP(rtmp);
-					RTSPToMP4(rtsp);
+					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -146,7 +147,7 @@ function RTSPToRTSP(rtsp, type) {
 			) {
 				setTimeout(() => {
 					RTSPToRTSP(rtsp, type);
-					RTSPToMP4(rtsp);
+					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -159,6 +160,7 @@ function RTSPToRTSP(rtsp, type) {
 				err.message.includes('Conversion failed') ||
 				err.message.includes('Connection timed out') ||
 				err.message.includes('No route to host') ||
+				err.message.includes('Error opening input file') ||
 				err.message.includes(
 					'Invalid data found when processing input'
 				) ||
@@ -166,7 +168,7 @@ function RTSPToRTSP(rtsp, type) {
 			) {
 				setTimeout(() => {
 					RTSPToRTSP(rtsp, type);
-					RTSPToMP4(rtsp);
+					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -213,7 +215,7 @@ function RTSPToMP4(rtsp) {
 	output += `/${fileName}.mp4`;
 
 	if (MP4_COMMANDS.hasOwnProperty(id)) {
-		MP4_COMMANDS[id].kill();
+		MP4_COMMANDS[id].kill("");
 	}
 
 	MP4_COMMANDS[id] = FFMPEG(input);
@@ -251,9 +253,10 @@ function RTSPToMP4(rtsp) {
 			}
 		})
 		.on('error', function (err, stdout, stderr) {
-			// console.log('MP4', ip, err.message);
+			console.log('MP4', ip, err.message);
 			if (
 				// err.message.includes('Connection refused')||
+				err.message.includes('Error opening input file') ||
 				err.message.includes('Server returned 404 Not Found') ||
 				err.message.includes('Conversion failed')
 			) {
@@ -373,7 +376,6 @@ APP.use(EXPRESS.static(__dirname));
 APP.get('/forceReloadSystem', (req, res) => {
 	try {
 		SPAWN(`${PM2_PATH} reload nvr --force`, { shell: true });
-
 		res.send('success');
 	} catch (err) {
 		console.log(err);
@@ -393,12 +395,10 @@ APP.post('/updateConfig', (req, res) => {
 
 			// Terminate all processes related to ffmpeg, media server and zombie processes.
 			const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
-
 			const killZombieProcesses = SPAWN(
 				`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 				{ shell: true }
 			);
-
 			setRtspList();
 			runProcesses();
 		});
@@ -412,11 +412,9 @@ APP.post('/updateConfig', (req, res) => {
 
 APP.post('/reloadFFmpeg', (req, res) => {
 	const { data } = req.body;
-
-	console.log(data);
-
 	try {
-		[`h264`, `hevc`].forEach((type) => {
+		
+		[(`h264`, `hevc`)].forEach((type) => {
 			const rtsp = CONFIG[`${type}RtspList`]
 				.filter(
 					(rtsp) =>
@@ -431,9 +429,13 @@ APP.post('/reloadFFmpeg', (req, res) => {
 				.join(' ');
 
 			if (rtsp) {
-				// RTSP reconnection mechanism.
-				RTSPToRTSP(rtsp, type);
-				RTSPToMP4(rtsp);
+				console.log(data);
+				
+				setTimeout(() => {
+					// RTSP reconnection mechanism.
+					RTSPToRTSP(rtsp, type);
+					// RTSPToMP4(rtsp);
+				}, 5000);
 			} else throw 'RTSP not found';
 		});
 
