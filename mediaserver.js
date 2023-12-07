@@ -16,18 +16,19 @@ const SSL_PATH = './certificates/ssl.pem';
 
 	mediaServer.stdout.on('data', (rawData) => {
 		rawData = `${rawData}`;
-
+		
 		if (rawData.includes('__defaultVhost__')) {
 			console.log(rawData);
 		}
 
 		if (
 			rawData.includes('断开') &&
-			!(
-				rawData.includes('no such stream') ||
-				rawData.includes('end of file') ||
-				rawData.includes('媒体注销')
-			)
+			rawData.includes('no such stream')
+			// !(
+			// 	// rawData.includes('no such stream') ||
+			// 	rawData.includes('end of file') ||
+			// 	rawData.includes('媒体注销')
+			// )
 		) {
 			const data = rawData
 				.split(' ')
