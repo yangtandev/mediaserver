@@ -417,38 +417,27 @@ APP.post('/updateConfig', (req, res) => {
 
 APP.post('/reloadFFmpeg', (req, res) => {
 	const { data } = req.body;
-	try {
-		
-		[(`h264`, `hevc`)].forEach((type) => {
-			const rtsp = CONFIG[`${type}RtspList`]
-				.filter(
-					(rtsp) =>
-						rtsp
-							.split('@')
-							.pop()
-							.split('/')
-							.shift()
-							.match(/\d/g)
-							.join('') == data.match(/\d/g).join('')
-				)
-				.join(' ');
+	
+	for(const type of [`h264`, `hevc`]) {
+		const rtsp = CONFIG[`${type}RtspList`]
+			.filter(
+				(rtsp) =>
+					rtsp
+						.split('@')
+						.pop()
+						.split('/')
+						.shift()
+						.match(/\d/g)
+						.join('') == data.match(/\d/g).join('')
+			)
+			.join(' ');
 
-			if (rtsp) {
-				console.log(data);
-				
-				setTimeout(() => {
-					// RTSP reconnection mechanism.
-					RTSPToRTSP(rtsp, type);
-					// RTSPToMP4(rtsp);
-				}, 5000);
-			} else throw 'RTSP not found';
-		});
-
-		res.send('success');
-	} catch (err) {
-		res.send(err);
-		return;
-	}
+		if (rtsp) {
+			console.log(data);
+			// RTSP reconnection mechanism.
+			RTSPToRTSP(rtsp, type);			
+		}
+	};
 });
 
 SERVER.listen(PORT, () => {
