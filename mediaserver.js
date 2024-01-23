@@ -22,8 +22,9 @@ const SSL_PATH = './certificates/ssl.pem';
 		}
 
 		if (
-			rawData.includes('断开') &&
-			rawData.includes('no such stream')
+			(rawData.includes('断开') && rawData.includes('no such stream')) ||
+			(rawData.includes('断开') &&
+				rawData.includes('pusher session timeout'))
 			// !(
 			// 	// rawData.includes('no such stream') ||
 			// 	rawData.includes('end of file') ||
