@@ -45,6 +45,7 @@ const SSL_PATH = "./certificates/ssl.pem";
                         (str.includes("rtsp:") || str.includes("rtmp:"))
                 );
 
+            // Match strings that do not contain the ANSI escape code \x1B and white space characters.
             if (data.includes("rtsp:")) {
                 data = data.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0];
             } else {
