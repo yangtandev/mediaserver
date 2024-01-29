@@ -15,18 +15,16 @@ const SSL_PATH = "./certificates/ssl.pem";
     });
 
     mediaServer.stdout.on("data", (rawData) => {
-        let data;
         rawData = `${rawData}`;
 
         if (
             rawData.includes("__defaultVhost__") &&
-            (rawData.includes("RTSP") ||
-                rawData.includes("rtsp:") ||
-                rawData.includes("rtmp:"))
+            (rawData.includes("RTSP") || rawData.includes("rtsp:"))
         ) {
             console.log(rawData);
         }
 
+        let data;
         if (rawData.includes("断开") && rawData.includes("no such stream")) {
             data = rawData
                 .split(" ")
@@ -34,23 +32,15 @@ const SSL_PATH = "./certificates/ssl.pem";
                     (str) =>
                         str.includes("__defaultVhost__") && str.includes("RTSP")
                 );
-        }
-
-        if (rawData.includes("媒体注销")) {
+        } else if (rawData.includes("媒体注销") && rawData.includes("rtsp:")) {
             data = rawData
                 .split(" ")
                 .find(
                     (str) =>
                         str.includes("__defaultVhost__") &&
-                        (str.includes("rtsp:") || str.includes("rtmp:"))
+                        str.includes("rtsp:")
                 );
-
-            // Match strings that do not contain the ANSI escape code \x1B and white space characters.
-            if (data.includes("rtsp:")) {
-                data = data.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0];
-            } else if (data.includes("rtmp:")) {
-                data = data.match(/媒体注销:(rtmp:\/\/[^\x1B|\s]+)/)[0];
-            }
+            data = data.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0];
         }
 
         if (data) {
