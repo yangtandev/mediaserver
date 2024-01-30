@@ -79,7 +79,7 @@
 					forceReloadSystem: function () {
 						const url = IS_HTTPS
 							? `https://${DOMAIN_NAME}:3000/forceReloadSystem`
-							: 'http://192.168.2.205:3000/forceReloadSystem';
+							: 'http://localhost:3000/forceReloadSystem';
 
 						axios
 							.get(url)
