@@ -28,7 +28,8 @@ git clone https://github.com/yangtandev/NVR.git
 -   FFMpeg: Latest version  
     安裝可參考:  
     https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/ffmpeg-with-nvidia-gpu/index.html
-    https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+    https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu  
+    https://jackfrisht.medium.com/install-nvidia-driver-via-ppa-in-ubuntu-18-04-fc9a8c4658b9
 -   ZLMediaKit: Latest version  
     進入 $home/NVR/ZLMediaKit，並按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
 -   Nginx: Latest version ( For HTTPS )  
