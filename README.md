@@ -31,7 +31,7 @@ git clone https://github.com/yangtandev/NVR.git
     https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu  
     https://jackfrisht.medium.com/install-nvidia-driver-via-ppa-in-ubuntu-18-04-fc9a8c4658b9
     ```
-    // Enter the NVR directory
+    // Enter NVR directory
     cd ~/NVR
     
     // Clone ffnvcodec
@@ -57,7 +57,7 @@ git clone https://github.com/yangtandev/NVR.git
     // Clone FFmpeg's public GIT repository.
     git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg/
     
-    // Enter the ffmepg directory
+    // Enter ffmepg directory
     cd ./ffmpeg
     
     // Get the Dependencies
@@ -73,8 +73,11 @@ git clone https://github.com/yangtandev/NVR.git
     sudo make install && cd ..
     ```
 -   ZLMediaKit: Latest version  
-    進入 $home/NVR/ZLMediaKit，並按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
+    按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
     ```
+    // Enter ZLMediaKit directory
+    cd ~/NVR/ZLMediaKit
+    
     // Install the compiler
     sudo apt-get install build-essential
     
