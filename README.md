@@ -88,7 +88,6 @@ git clone https://github.com/yangtandev/NVR.git
     sudo apt-get install libavutil-dev
     
     // Build and compile the project
-    cd ZLMediaKit
     mkdir build
     cd build
     cmake ..
