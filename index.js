@@ -265,13 +265,15 @@ function RTSPToMP4(rtsp) {
 				}, 5000);
 			}
 		})
-		.on('end', async function () {
+		.on('end', function () {
 			RTSPToMP4(rtsp);
-			const stat = await FS.stat(output);
-
-			if (stat.isFile() && stat.size == 0) {
-				FS.remove(output);
-			}
+			FS.stat(output, (error, stats) => {
+                		if (error) {
+                    			console.log(error);
+                		} else if (stats.isFile() && stats.size == 0) {
+                    			FS.remove(output);
+                		}
+            		});
 		})
 		.save(output);
 }
