@@ -215,7 +215,7 @@ function RTSPToMP4(rtsp) {
 	output += `/${fileName}.mp4`;
 
 	if (MP4_COMMANDS.hasOwnProperty(id)) {
-		MP4_COMMANDS[id].kill("");
+		MP4_COMMANDS[id].kill("SIGTERM");
 	}
 
 	MP4_COMMANDS[id] = FFMPEG(input);
@@ -461,7 +461,7 @@ process.on('SIGINT', (code) => {
 			console.log(`${slashes} ${word} ${slashes}`);
 		});
 
-	const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
+	// const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
 
 	const killZombieProcesses = SPAWN(
 		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
