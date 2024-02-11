@@ -24,37 +24,39 @@ const SSL_PATH = "./certificates/ssl.pem";
             console.log(rawData);
         }
 
-        let data;
+        let dataList = [];
         if (rawData.includes("断开") && rawData.includes("no such stream")) {
-            data = rawData
+            dataList = rawData
                 .split(" ")
-                .find(
+                .filter(
                     (str) =>
                         str.includes("__defaultVhost__") && str.includes("RTSP")
                 );
         } else if (rawData.includes("媒体注销") && rawData.includes("rtsp:")) {
-            data = rawData
+            dataList = rawData
                 .split(" ")
-                .find(
+                .filter(
                     (str) =>
                         str.includes("__defaultVhost__") &&
                         str.includes("rtsp:")
-                );
-            data = data.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0];
+                )
+                .map((str) => str.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0]);
         }
 
-        if (data) {
-            const body = {
-                data: data,
-            };
-            const url = IS_HTTPS
-                ? `https://${DOMAIN_NAME}/api/reloadFFmpeg`
-                : `http://localhost:3000/reloadFFmpeg`;
-            const response = FETCH(url, {
-                method: "POST",
-                body: JSON.stringify(body),
-                headers: { "Content-Type": "application/json" },
-            });
+        if (dataList.length > 0) {
+            for (const data of dataList) {
+                const body = {
+                    data: data,
+                };
+                const url = IS_HTTPS
+                    ? `https://${DOMAIN_NAME}/api/reloadFFmpeg`
+                    : `http://localhost:3000/reloadFFmpeg`;
+                const response = FETCH(url, {
+                    method: "POST",
+                    body: JSON.stringify(body),
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
         }
     });
 })();
