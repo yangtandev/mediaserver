@@ -16,7 +16,8 @@
     "dependencies": {
         "cors": "^2.8.5",
         "node-fetch": "^3.3.1",
-        "nodemon": "^2.0.20"
+        "nodemon": "^2.0.20",
+        "fs-extra": "^11.1.1"
     },
     "bin": "rtsp-stream-api.js",
     "optionalDependencies": {
