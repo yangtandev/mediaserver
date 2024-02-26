@@ -82,10 +82,7 @@ git clone https://github.com/yangtandev/NVR.git
     sudo apt-get install build-essential
     
     // Install dependent libraries
-    sudo apt-get install libssl-dev
-    sudo apt-get install libsdl-dev
-    sudo apt-get install libavcodec-dev
-    sudo apt-get install libavutil-dev
+    sudo apt-get install libssl-dev libsdl-dev libavcodec-dev libavutil-dev
     
     // Build and compile the project
     mkdir build
