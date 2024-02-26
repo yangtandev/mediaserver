@@ -71,6 +71,9 @@ git clone https://github.com/yangtandev/NVR.git
     
     // Install the libraries.
     sudo make install && cd ..
+
+    // Update the shared library cache on a Linux system.
+    sudo ldconfig    
     ```
 -   ZLMediaKit: Latest version  
     按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
