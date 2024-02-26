@@ -61,7 +61,7 @@ git clone https://github.com/yangtandev/NVR.git
     cd ./ffmpeg
     
     // Get the Dependencies
-    sudo apt-get update -qq && sudo apt-get -y install autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev libc6 libc6-dev libnuma1 libnuma-dev meson ninja-build pkg-config texinfo unzip wget yasm zlib1g-dev
+    sudo apt-get update -qq && sudo apt-get -y install autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev libc6 libc6-dev libnuma1 libnuma-dev meson ninja-build pkg-config texinfo unzip wget yasm zlib1g-dev nasm libx264-dev libx265-dev libnuma-dev
     
     // Configure
     ./configure --enable-nonfree --enable-cuda-nvcc --enable-libnpp --extra-cflags=-I/usr/local/cuda/include --extra-ldflags=-L/usr/local/cuda/lib64 --disable-static --enable-shared --enable-gpl --enable-libx264 --enable-libx265
