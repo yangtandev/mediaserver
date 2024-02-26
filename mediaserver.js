@@ -25,7 +25,11 @@ const SSL_PATH = "./certificates/ssl.pem";
         }
 
         let dataList = [];
-        if (rawData.includes("断开") && rawData.includes("no such stream")) {
+        if (
+			rawData.includes('断开') &&
+			(rawData.includes('no such stream') ||
+				rawData.includes('pusher session timeout'))
+		) {
             dataList = rawData
                 .split(" ")
                 .filter(
