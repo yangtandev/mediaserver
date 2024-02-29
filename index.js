@@ -104,7 +104,7 @@ function RTMPToRTSP(rtmp) {
 */
 function RTSPToRTSP(rtsp, type) {
 	const ip = rtsp.split('@').pop().split('/').shift();
-	const id = ip.match(/\d+/g).join();
+	const id = ip.match(/\d+/g).join('');
 	const output = `rtsp://localhost:9554/live/${ip}`;
 
 	if (RTSP_COMMANDS.hasOwnProperty(id)) {
@@ -186,7 +186,7 @@ function RTSPToMP4(rtsp) {
 		? rtsp.split('@').pop().split('/').shift()
 		: rtsp.split('/').pop();
 
-	const id = ip.includes(':') ? ip.match(/\d+/g).join() : ip;
+	const id = ip.includes(':') ? ip.match(/\d+/g).join('') : ip;
 	const { clientName } = CONFIG.clientList.find((client) => {
 		if (client.rtspList) {
 			return client.rtspList.includes(rtsp);
