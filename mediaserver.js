@@ -36,6 +36,7 @@ const SSL_PATH = "./certificates/ssl.pem";
                     (str) =>
                         str.includes("__defaultVhost__") && str.includes("RTSP")
                 );
+	    console.log('1111:', dataList);
         } else if (rawData.includes("媒体注销") && rawData.includes("rtsp:")) {
             dataList = rawData
                 .split(" ")
@@ -45,9 +46,12 @@ const SSL_PATH = "./certificates/ssl.pem";
                         str.includes("rtsp:")
                 )
                 .map((str) => str.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0]);
+	    console.log('2222:', dataList);
         }
 
         if (dataList.length > 0) {
+	    dataList = dataList.map((data) => data.match(/\d/g).join(''));
+	    console.log('3333:', dataList);
             for (const data of dataList) {
                 const body = {
                     data: data,
