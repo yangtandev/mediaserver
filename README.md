@@ -11,6 +11,8 @@
 
 ```
 git clone https://github.com/yangtandev/mediaserver.git
+cd ~/mediaserver
+npm i
 ```
 
 ## 環境需求
@@ -31,8 +33,8 @@ git clone https://github.com/yangtandev/mediaserver.git
     https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu  
     https://jackfrisht.medium.com/install-nvidia-driver-via-ppa-in-ubuntu-18-04-fc9a8c4658b9
     ```
-    // Enter NVR directory
-    cd ~/NVR
+    // Enter mediaserver directory
+    cd ~/mediaserver
     
     // Clone ffnvcodec
     git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git
@@ -79,7 +81,7 @@ git clone https://github.com/yangtandev/mediaserver.git
     按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
     ```
     // Enter ZLMediaKit directory
-    cd ~/NVR/ZLMediaKit
+    cd ~/mediaserver/ZLMediaKit
     
     // Install the compiler
     sudo apt-get install build-essential
@@ -117,7 +119,7 @@ git clone https://github.com/yangtandev/mediaserver.git
 ## 快速開始
 
 ```
-cd $HOME/NVR
+cd $HOME/mediaserver
 npm i
 pm2 start ecosystem.config.js
 pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
@@ -131,21 +133,21 @@ pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
 2. 自動影像串流備分: 按日期、客戶作分類，可依需求線上瀏覽或直接下載影像檔。  
    https://example.com/your_client_name/backup  
    http://localhost:9080/your_client_name/backup
-3. NVR 即時影像串流預覽: 可觀看註冊於 config 頁中的客戶的攝影機影像串流。  
-   https://example.com/nvr  
-   http://localhost:9080/nvr
+3. mediaserver 即時影像串流預覽: 可觀看註冊於 config 頁中的客戶的攝影機影像串流。  
+   https://example.com/mediaserver  
+   http://localhost:9080/mediaserver
 
 ## 備註
 
 如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"IS_HTTPS"設置為"true":
 
--   $HOME/NVR/index.js
--   $HOME/NVR/mediaserver.js
--   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/nvr/index.html
--   $HOME/NVR/ZLMediaKit/release/linux/Debug/www/config/index.html
+-   $HOME/mediaserver/index.js
+-   $HOME/mediaserver/mediaserver.js
+-   $HOME/mediaserver/ZLMediaKit/release/linux/Debug/www/mediaserver/index.html
+-   $HOME/mediaserver/ZLMediaKit/release/linux/Debug/www/config/index.html
 
 最後，使用終端機輸入以下指令，以使新配置生效:
 
 ```
-pm2 reload nvr
+pm2 reload mediaserver
 ```
