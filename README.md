@@ -10,7 +10,7 @@
 ## 獲取代碼
 
 ```
-git clone https://github.com/yangtandev/NVR.git
+git clone https://github.com/yangtandev/mediaserver.git
 ```
 
 ## 環境需求
