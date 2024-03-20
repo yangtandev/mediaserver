@@ -102,11 +102,15 @@ npm i
     完成後，請於 /etc/nginx/sites-enabled/default 中，找到 listen 443 ssl 的 server，並在裡面加入:
 
     ```
-    location / {
-        proxy_pass https://localhost:9443;
+    location /mediaserver/ {
+        proxy_pass https://localhost:9080;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    }
+    
+    location /api/ {
+        proxy_pass http://localhost:3000/;
     }
     ```
 
@@ -128,26 +132,8 @@ pm2 save (記得先使用 pm2 startup 設定開機自動啟動 pm2)
 ## 功能介紹
 
 1. 自訂的客戶列表: 可按照需求加入客戶的攝影機串流資訊，支援包括 RTMP、RTSP( H264 及 HEVC )等協議。  
-   https://example.com/config  
    http://localhost:9080/config
 2. 自動影像串流備分: 按日期、客戶作分類，可依需求線上瀏覽或直接下載影像檔。  
-   https://example.com/your_client_name/backup  
    http://localhost:9080/your_client_name/backup
 3. mediaserver 即時影像串流預覽: 可觀看註冊於 config 頁中的客戶的攝影機影像串流。  
-   https://example.com/mediaserver  
    http://localhost:9080/mediaserver
-
-## 備註
-
-如需切換成 HTTPS 協議，可直接於下列路徑的檔案中，將代碼"IS_HTTPS"設置為"true":
-
--   $HOME/mediaserver/index.js
--   $HOME/mediaserver/mediaserver.js
--   $HOME/mediaserver/ZLMediaKit/release/linux/Debug/www/mediaserver/index.html
--   $HOME/mediaserver/ZLMediaKit/release/linux/Debug/www/config/index.html
-
-最後，使用終端機輸入以下指令，以使新配置生效:
-
-```
-pm2 reload mediaserver
-```
