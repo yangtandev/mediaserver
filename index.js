@@ -1,36 +1,19 @@
 const HTTP = require('http');
-const HTTPS = require('https');
 const FS = require('fs');
 const SPAWN = require('child_process').spawn;
 const EXPRESS = require('express');
 const CORS = require('cors');
 const APP = EXPRESS();
-const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
-const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
-const SERVER = IS_HTTPS
-	? HTTPS.createServer(
-			{
-				key: FS.readFileSync(
-					`/etc/letsencrypt/live/${DOMAIN_NAME}/privkey.pem`,
-					'utf8'
-				),
-				cert: FS.readFileSync(
-					`/etc/letsencrypt/live/${DOMAIN_NAME}/fullchain.pem`,
-					'utf8'
-				),
-			},
-			APP
-	  )
-	: HTTP.createServer(APP);
+const SERVER = HTTP.createServer(APP);
 const PORT = 3000;
-const RTMP_COMMANDS = {};
-const RTSP_COMMANDS = {};
-const MP4_COMMANDS = {};
-const PM2_PATH = `$HOME/.nvm/versions/node/v14.16.1/bin/pm2`;
+const PM2_PATH = process.env.NVM_BIN + '/pm2';
 const BACKUP_PATH = `./ZLMediaKit/release/linux/Debug/www`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
 FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
+const RTMP_COMMANDS = {};
+const RTSP_COMMANDS = {};
+const MP4_COMMANDS = {};
 let CONFIG = {};
 
 /*
@@ -70,14 +53,11 @@ function RTMPToRTSP(rtmp) {
 			) {
 				setTimeout(() => {
 					RTMPToRTSP(rtmp);
-					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
 		.on('error', function (err, stdout, stderr) {
 			if (
-				// err.message.includes('5XX Server Error reply') ||
-				// err.message.includes('Connection refused') ||
 				err.message.includes('Error opening input file') ||
 				err.message.includes('Conversion failed') ||
 				err.message.includes('Connection timed out') ||
@@ -89,7 +69,6 @@ function RTMPToRTSP(rtmp) {
 			) {
 				setTimeout(() => {
 					RTMPToRTSP(rtmp);
-					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -147,7 +126,6 @@ function RTSPToRTSP(rtsp, type) {
 			) {
 				setTimeout(() => {
 					RTSPToRTSP(rtsp, type);
-					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
 		})
@@ -155,7 +133,6 @@ function RTSPToRTSP(rtsp, type) {
 			console.log('RTSP', ip, err.message);
 
 			if (
-				// err.message.includes('5XX Server Error reply') ||
 				err.message.includes('Connection refused') ||
 				err.message.includes('Conversion failed') ||
 				err.message.includes('Connection timed out') ||
@@ -168,12 +145,8 @@ function RTSPToRTSP(rtsp, type) {
 			) {
 				setTimeout(() => {
 					RTSPToRTSP(rtsp, type);
-					// RTSPToMP4(rtsp);
 				}, 5000);
 			}
-		})
-		.on('end', function () {
-			RTSPToRTSP(rtsp, type);
 		})
 		.run();
 }
@@ -215,7 +188,7 @@ function RTSPToMP4(rtsp) {
 	output += `/${fileName}.mp4`;
 
 	if (MP4_COMMANDS.hasOwnProperty(id)) {
-		MP4_COMMANDS[id].kill("SIGTERM");
+		MP4_COMMANDS[id].kill('SIGTERM');
 	}
 
 	MP4_COMMANDS[id] = FFMPEG(input);
@@ -255,7 +228,6 @@ function RTSPToMP4(rtsp) {
 		.on('error', function (err, stdout, stderr) {
 			console.log('MP4', ip, err.message);
 			if (
-				// err.message.includes('Connection refused')||
 				err.message.includes('Error opening input file') ||
 				err.message.includes('Server returned 404 Not Found') ||
 				err.message.includes('Conversion failed')
@@ -268,12 +240,12 @@ function RTSPToMP4(rtsp) {
 		.on('end', function () {
 			RTSPToMP4(rtsp);
 			FS.stat(output, (error, stats) => {
-                		if (error) {
-                    			console.log(error);
-                		} else if (stats.isFile() && stats.size == 0) {
-                    			FS.remove(output);
-                		}
-            		});
+				if (error) {
+					console.log(error);
+				} else if (stats.isFile() && stats.size == 0) {
+					FS.remove(output);
+				}
+			});
 		})
 		.save(output);
 }
@@ -419,30 +391,42 @@ APP.post('/updateConfig', (req, res) => {
 
 APP.post('/reloadFFmpeg', (req, res) => {
 	const { data } = req.body;
-	
-	for(const type of [`h264`, `hevc`]) {
-		const rtsp = CONFIG[`${type}RtspList`]
-			.filter(
-				(rtsp) =>
-					rtsp
-						.split('@')
-						.pop()
-						.split('/')
-						.shift()
-						.match(/\d/g)
-						.join('') == data.match(/\d/g).join('')
-			)
-			.join(' ');
 
-		if (rtsp) {
-			console.log(data);
-			// RTSP reconnection mechanism.
-			RTSPToRTSP(rtsp, type);			
+	for (const type of [`h264`, `hevc`, `rtmp`]) {
+		if (type == 'rtmp') {
+			const rtmp = CONFIG[`rtmpList`]
+				.filter((rtmp) => rtmp.split('/').pop() == data)
+				.join(' ');
+
+			if (rtmp) {
+				console.log(data);
+				// RTMP reconnection mechanism.
+				RTMPToRTSP(rtmp);
+			}
+		} else if (/^[^a-zA-Z]*$/.test(data)) {
+			const rtsp = CONFIG[`${type}RtspList`]
+				.filter(
+					(rtsp) =>
+						rtsp
+							.split('@')
+							.pop()
+							.split('/')
+							.shift()
+							.match(/\d/g)
+							.join('') == data.match(/\d/g).join('')
+				)
+				.join(' ');
+
+			if (rtsp) {
+				console.log(data);
+				// RTSP reconnection mechanism.
+				RTSPToRTSP(rtsp, type);
+			}
 		}
-	};
+	}
 });
 
-SERVER.listen(PORT, () => {
+SERVER.listen(PORT, '0.0.0.0', () => {
 	setTimeout(() => {
 		setRtspList();
 		runProcesses();
@@ -460,8 +444,6 @@ process.on('SIGINT', (code) => {
 			const slashes = String('|').repeat(30);
 			console.log(`${slashes} ${word} ${slashes}`);
 		});
-
-	// const killFFMPEG = SPAWN('killall -9 ffmpeg', { shell: true });
 
 	const killZombieProcesses = SPAWN(
 		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
