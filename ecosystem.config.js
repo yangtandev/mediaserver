@@ -1,8 +1,8 @@
 module.exports = {
 	apps: [
 		{
-			name: 'nvr',
-			script: 'index.js',
+			name: 'media-stream-converter',
+			script: 'media-stream-converter.js',
 			time: true,
 		},
 		{
