@@ -229,6 +229,7 @@ function RTSPToMP4(rtsp) {
 			console.log('MP4', ip, err.message);
 			if (
 				err.message.includes('Error opening input file') ||
+				err.message.includes('Error opening output file') ||
 				err.message.includes('Server returned 404 Not Found') ||
 				err.message.includes('Conversion failed')
 			) {
