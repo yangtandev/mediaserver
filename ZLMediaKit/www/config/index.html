@@ -15,7 +15,7 @@
 		<script type="module">
 			import CLIENT_LIST from './config/config.json' assert { type: 'json' };
 
-			const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
+			const DOMAIN_NAME = 'stream.ginibio.com/api'; // Replace it with your registered domain name.
 			const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
 			const APP = Vue.createApp({});
 
@@ -51,7 +51,7 @@
 					},
 					updateConfig: function () {
 						const url = IS_HTTPS
-							? `https://${DOMAIN_NAME}:3000/updateConfig`
+							? `https://${DOMAIN_NAME}/updateConfig`
 							: 'http://localhost:3000/updateConfig';
 						axios
 							.post(url, { data: this.value })
@@ -78,7 +78,7 @@
 					},
 					forceReloadSystem: function () {
 						const url = IS_HTTPS
-							? `https://${DOMAIN_NAME}:3000/forceReloadSystem`
+							? `https://${DOMAIN_NAME}/forceReloadSystem`
 							: 'http://localhost:3000/forceReloadSystem';
 
 						axios
