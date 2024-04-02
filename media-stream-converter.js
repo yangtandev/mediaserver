@@ -15,6 +15,7 @@ const RTMP_COMMANDS = {};
 const RTSP_COMMANDS = {};
 const MP4_COMMANDS = {};
 let CONFIG = {};
+let CONVERT_LIVE_STREAM_TO_MP4 = false
 
 /*
     Convert the original RTMP stream to RTSP stream.
@@ -330,21 +331,27 @@ function runProcesses() {
 			const rtsp = `rtsp://localhost:9554/live/${id}`;
 
 			RTMPToRTSP(rtmp);
-			RTSPToMP4(rtsp);
+			if(CONVERT_LIVE_STREAM_TO_MP4) {
+				RTSPToMP4(rtsp);
+			}	
 		});
 	}
 
 	if (CONFIG.h264RtspList.length > 0) {
 		CONFIG.h264RtspList.forEach((rtsp) => {
 			RTSPToRTSP(rtsp, 'h264');
-			RTSPToMP4(rtsp);
+			if(CONVERT_LIVE_STREAM_TO_MP4) {
+				RTSPToMP4(rtsp);
+			}
 		});
 	}
 
 	if (CONFIG.hevcRtspList.length > 0) {
 		CONFIG.hevcRtspList.forEach((rtsp) => {
 			RTSPToRTSP(rtsp, 'hevc');
-			RTSPToMP4(rtsp);
+			if(CONVERT_LIVE_STREAM_TO_MP4) {
+				RTSPToMP4(rtsp);
+			}
 		});
 	}
 }
