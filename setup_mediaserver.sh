@@ -13,12 +13,14 @@ sudo ubuntu-drivers devices
 sudo apt -y install nvidia-driver-545
 
 # Install Cuda
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-u>sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
-wget https://developer.download.nvidia.com/compute/cuda/12.3.2/local_installers/cuda-r>sudo dpkg -i cuda-repo-ubuntu2204-12-3-local_12.3.2-545.23.08-1_amd64.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+wget https://developer.download.nvidia.com/compute/cuda/12.3.2/local_installers/cuda-repo-ubuntu2204-12-3-local_12.3.2-545.23.08-1_amd64.deb
+sudo dpkg -i cuda-repo-ubuntu2204-12-3-local_12.3.2-545.23.08-1_amd64.deb
 sudo cp /var/cuda-repo-ubuntu2204-12-3-local/cuda-*-keyring.gpg /usr/share/keyrings/
 sudo apt-get -y update
 sudo apt-get -y install cuda-toolkit-12-3
-sudo rm -rf cuda-ubuntu2204.pin cuda-repo-ubuntu2204-12-3-local_12.3.2-545.23.08-1_amd>
+sudo rm -rf cuda-ubuntu2204.pin cuda-repo-ubuntu2204-12-3-local_12.3.2-545.23.08-1_amd64.deb
 
 # Enter mediaserver directory
 cd $HOME/mediaserver || exit
@@ -47,7 +49,7 @@ source $HOME/.bashrc
 sudo ldconfig
 
 # Get the Dependencies
-sudo apt-get -y update -qq && sudo apt-get -y install autoconf automake build-essentia>
+sudo apt-get -y update -qq && sudo apt-get -y install autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsdl2-dev libt>
 
 # Enter ZLMediaKit directory
 cd $HOME/mediaserver/ZLMediaKit || exit
