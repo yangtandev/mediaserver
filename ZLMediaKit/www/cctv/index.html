@@ -45,9 +45,9 @@
 								rtsp.split('@').pop().split('/').shift()
 							)
 					: [];
-			const URL_LIST = RTMP_CLIENT_LIST.concat(
-				H264_RTSP_CLIENT_LIST
-			).concat(HEVC_RTSP_CLIENT_LIST);
+			const URL_LIST = H264_RTSP_CLIENT_LIST.concat(
+				HEVC_RTSP_CLIENT_LIST
+			).concat(RTMP_CLIENT_LIST);
 
 			const WSS_LIST = URL_LIST.map((url) =>
 				IS_HTTPS
