@@ -325,18 +325,6 @@ function clearExpiredBackup() {
     Run all necessary processes.
 */
 function runProcesses() {
-	if (CONFIG.rtmpList.length > 0) {
-		CONFIG.rtmpList.forEach((rtmp) => {
-			const id = rtmp.split('/').pop();
-			const rtsp = `rtsp://localhost:9554/live/${id}`;
-
-			RTMPToRTSP(rtmp);
-			if(CONVERT_LIVE_STREAM_TO_MP4) {
-				RTSPToMP4(rtsp);
-			}	
-		});
-	}
-
 	if (CONFIG.h264RtspList.length > 0) {
 		CONFIG.h264RtspList.forEach((rtsp) => {
 			RTSPToRTSP(rtsp, 'h264');
@@ -352,6 +340,18 @@ function runProcesses() {
 			if(CONVERT_LIVE_STREAM_TO_MP4) {
 				RTSPToMP4(rtsp);
 			}
+		});
+	}
+
+	if (CONFIG.rtmpList.length > 0) {
+		CONFIG.rtmpList.forEach((rtmp) => {
+			const id = rtmp.split('/').pop();
+			const rtsp = `rtsp://localhost:9554/live/${id}`;
+
+			RTMPToRTSP(rtmp);
+			if(CONVERT_LIVE_STREAM_TO_MP4) {
+				RTSPToMP4(rtsp);
+			}	
 		});
 	}
 }
