@@ -43,7 +43,8 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 				.filter(
 					(str) =>
 						str.includes('__defaultVhost__') &&
-						str.includes('rtsp:')
+						str.includes('rtsp:') &&
+						str.includes('媒体注销:')
 				)
 				.map((str) => str.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0]);
 
@@ -54,7 +55,8 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 				.filter(
 					(str) =>
 						str.includes('__defaultVhost__') &&
-						str.includes('rtmp:')
+						str.includes('rtmp:') &&
+						str.includes('媒体注销:')
 				)
 				.map((str) => str.match(/媒体注销:(rtmp:\/\/[^\x1B|\s]+)/)[0]);
 
