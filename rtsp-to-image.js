@@ -1,10 +1,4 @@
-const SPAWN = require('child_process').spawn;
-const HTTP = require('http');
 const FS = require('fs-extra');
-const EXPRESS = require('express');
-const APP = EXPRESS();
-const SERVER = HTTP.createServer(APP);
-const PORT = 4000;
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
@@ -105,36 +99,10 @@ function setRtspList() {
 		.concat(CONFIG.hevcRtspList);
 }
 
-/*
-    Run all necessary processes.
-*/
-SERVER.listen(PORT, () => {
-	console.log(`http://localhost:9080/image`);
-	setRtspList();
+setRtspList();
 
-	if (CONFIG.allRtspList.length > 0) {
-		for (const rtsp of CONFIG.allRtspList) {
-			RTSPToImage(rtsp);
-		}
+if (CONFIG.allRtspList.length > 0) {
+	for (const rtsp of CONFIG.allRtspList) {
+		RTSPToImage(rtsp);
 	}
-});
-
-/* 
-    When the program terminates, clear the related background programs.
-*/
-process.on('SIGINT', (code) => {
-	String('SIGINT')
-		.split('')
-		.forEach((word) => {
-			const slashes = String('|').repeat(30);
-			console.log(`${slashes} ${word} ${slashes}`);
-		});
-
-	// Terminate all zombie processes.
-	const killZombieProcesses = SPAWN(
-		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
-		{
-			shell: true,
-		}
-	);
-});
+}
