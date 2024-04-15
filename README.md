@@ -13,7 +13,10 @@
 git clone https://github.com/yangtandev/mediaserver.git 
 $HOME/mediaserver/setup_mediaserver.sh
 ```
-
+- 需要 Frame Animation 功能，請執行以下代碼:
+``` 
+pm2 start $HOME/mediaserver/rtsp-to-image.js && pm2 start $HOME/mediaserver/websocket-server.js && pm2 save
+```
 ## 環境需求
 
 -   Git: Latest version
@@ -49,6 +52,13 @@ $HOME/mediaserver/setup_mediaserver.sh
     
     location /api/ {
         proxy_pass http://localhost:3000/;
+    }
+
+    location /ws {
+        proxy_pass http://localhost:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
     }
     ```
 
