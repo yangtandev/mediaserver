@@ -52,7 +52,7 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 		} 
 		
 		if (dataList.length > 0) {
-			dataList = dataList.map((data) => data.match(/\d/g).join('');
+			dataList = dataList.map((data) => data.match(/\d/g).join(''));
 			
 			console.log('3333:', dataList);
 
