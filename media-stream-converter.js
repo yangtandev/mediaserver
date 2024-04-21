@@ -438,7 +438,9 @@ SERVER.listen(PORT, '0.0.0.0', () => {
 	setTimeout(() => {
 		setRtspList();
 		runProcesses();
-		setInterval(clearExpiredBackup, 1000 * 60 * 5);
+		if(CONVERT_LIVE_STREAM_TO_MP4) {
+			setInterval(clearExpiredBackup, 1000 * 60 * 5);
+		}
 	}, 1000 * 10); // Buffer time reserved for reboot.
 });
 
