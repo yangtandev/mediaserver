@@ -33,7 +33,7 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 				.filter(
 					(str) =>
 						str.includes('__defaultVhost__') &&
-						(str.includes('RTSP') || str.includes('RTMP'))
+						str.includes('RTSP') 
 				);
 
 			console.log('1111:', dataList);
@@ -49,31 +49,12 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 				.map((str) => str.match(/媒体注销:(rtsp:\/\/[^\x1B|\s]+)/)[0]);
 
 			console.log('2222:', dataList);
-		} else if (rawData.includes('媒体注销') && rawData.includes('rtmp:')) {
-			dataList = rawData
-				.split(' ')
-				.filter(
-					(str) =>
-						str.includes('__defaultVhost__') &&
-						str.includes('rtmp:') &&
-						str.includes('媒体注销:')
-				)
-				.map((str) => str.match(/媒体注销:(rtmp:\/\/[^\x1B|\s]+)/)[0]);
-
-			console.log('3333:', dataList);
-		}
-
+		} 
+		
 		if (dataList.length > 0) {
-			dataList = dataList.map((data) => {
-				if (data.includes('drone')) {
-					data = 'drone';
-				} else {
-					data = data.match(/\d/g).join('');
-				}
-				return data;
-			});
-
-			console.log('4444:', dataList);
+			dataList = dataList.map((data) => data.match(/\d/g).join('');
+			
+			console.log('3333:', dataList);
 
 			for (const data of dataList) {
 				const body = {
