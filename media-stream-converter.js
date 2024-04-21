@@ -11,73 +11,10 @@ const BACKUP_PATH = `./ZLMediaKit/release/linux/Debug/www`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
 FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
-const RTMP_COMMANDS = {};
 const RTSP_COMMANDS = {};
 const MP4_COMMANDS = {};
 let CONFIG = {};
 let CONVERT_LIVE_STREAM_TO_MP4 = false
-
-/*
-    Convert the original RTMP stream to RTSP stream.
-*/
-function RTMPToRTSP(rtmp) {
-	const id = rtmp.split('/').pop();
-	const rtsp = `rtsp://localhost:9554/live/${id}`;
-
-	if (RTMP_COMMANDS.hasOwnProperty(id)) {
-		RTMP_COMMANDS[id].kill('SIGKILL');
-	}
-
-	RTMP_COMMANDS[id] = FFMPEG(rtmp);
-	RTMP_COMMANDS[id]
-		.addInputOption()
-		.addOutputOption(
-			'-fps_mode',
-			'passthrough',
-			'-rtsp_transport',
-			'tcp',
-			'-preset',
-			'medium',
-			'-movflags',
-			'faststart',
-			'-threads',
-			2
-		)
-		.output(rtsp)
-		.outputFormat('rtsp')
-		.videoCodec('h264_nvenc')
-		.noAudio()
-		.on('stderr', function (err) {
-			if (
-				err.includes('muxing overhead: unknown') ||
-				err.includes('Error muxing a packet')
-			) {
-				setTimeout(() => {
-					RTMPToRTSP(rtmp);
-				}, 5000);
-			}
-		})
-		.on('error', function (err, stdout, stderr) {
-			if (
-				err.message.includes('Error opening input file') ||
-				err.message.includes('Conversion failed') ||
-				err.message.includes('Connection timed out') ||
-				err.message.includes('No route to host') ||
-				err.message.includes(
-					'Invalid data found when processing input'
-				) ||
-				err.message.includes('Generic error in an external library')
-			) {
-				setTimeout(() => {
-					RTMPToRTSP(rtmp);
-				}, 5000);
-			}
-		})
-		.on('end', function () {
-			RTMPToRTSP(rtmp);
-		})
-		.run();
-}
 
 /*
     Convert the original RTSP stream to a format acceptable to Media Server.
@@ -164,10 +101,6 @@ function RTSPToMP4(rtsp) {
 	const { clientName } = CONFIG.clientList.find((client) => {
 		if (client.rtspList) {
 			return client.rtspList.includes(rtsp);
-		} else if (client.rtmpList) {
-			return client.rtmpList
-				.map((rtmp) => rtmp.split('/').pop())
-				.includes(id);
 		}
 	});
 
@@ -342,18 +275,6 @@ function runProcesses() {
 			}
 		});
 	}
-
-	if (CONFIG.rtmpList.length > 0) {
-		CONFIG.rtmpList.forEach((rtmp) => {
-			const id = rtmp.split('/').pop();
-			const rtsp = `rtsp://localhost:9554/live/${id}`;
-
-			RTMPToRTSP(rtmp);
-			if(CONVERT_LIVE_STREAM_TO_MP4) {
-				RTSPToMP4(rtsp);
-			}	
-		});
-	}
 }
 
 APP.use(CORS());
@@ -400,37 +321,25 @@ APP.post('/updateConfig', (req, res) => {
 APP.post('/reloadFFmpeg', (req, res) => {
 	const { data } = req.body;
 
-	for (const type of [`h264`, `hevc`, `rtmp`]) {
-		if (type == 'rtmp') {
-			const rtmp = CONFIG[`rtmpList`]
-				.filter((rtmp) => rtmp.split('/').pop() == data)
-				.join(' ');
-
-			if (rtmp) {
-				console.log(data);
-				// RTMP reconnection mechanism.
-				RTMPToRTSP(rtmp);
-			}
-		} else if (/^[^a-zA-Z]*$/.test(data)) {
-			const rtsp = CONFIG[`${type}RtspList`]
-				.filter(
-					(rtsp) =>
-						rtsp
-							.split('@')
-							.pop()
-							.split('/')
-							.shift()
-							.match(/\d/g)
-							.join('') == data.match(/\d/g).join('')
-				)
-				.join(' ');
+	for (const type of [`h264`, `hevc`]) {
+		const rtsp = CONFIG[`${type}RtspList`]
+			.filter(
+				(rtsp) =>
+					rtsp
+						.split('@')
+						.pop()
+						.split('/')
+						.shift()
+						.match(/\d/g)
+						.join('') == data.match(/\d/g).join('')
+			)
+			.join(' ');
 
 			if (rtsp) {
 				console.log(data);
 				// RTSP reconnection mechanism.
 				RTSPToRTSP(rtsp, type);
 			}
-		}
 	}
 });
 
