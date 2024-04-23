@@ -16,7 +16,7 @@ $HOME/mediaserver/setup_mediaserver.sh
 ```
 - 需要 Frame Animation 功能，請執行以下代碼:
 ``` 
-pm2 start $HOME/mediaserver/rtsp-to-image.js && pm2 start $HOME/mediaserver/websocket-server.js && pm2 save
+pm2 start $HOME/mediaserver/rtsp-to-image.js --time --cron-restart="*/10 * * * *" && pm2 start $HOME/mediaserver/websocket-server.js --time && pm2 save
 ```
 ## 環境需求
 
