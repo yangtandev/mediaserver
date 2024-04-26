@@ -1,9 +1,43 @@
+const FS = require('fs');
 const SPAWN = require('child_process').spawn;
 const FETCH = (...args) =>
-	import('node-fetch').then(({ default: fetch }) => fetch(...args));
+        import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
+const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
+const { RTSPToRTSP } = require('./media-stream-converter.js');
+let CONFIG = {};
 
-(function runMediaServer() {
+/*
+    Set rtsp list related variables.
+*/
+function setRtspList() {
+        const source = JSON.parse(FS.readFileSync(CONFIG_PATH, 'utf8'));
+        const typeList = ['rtmp', 'h264Rtsp', 'hevcRtsp'];
+        CONFIG = JSON.parse(JSON.stringify(source));
+        CONFIG[`clientList`] = [];
+
+        typeList.forEach((type) => {
+                CONFIG[`clientList`] = CONFIG[`clientList`].concat(
+                        CONFIG[`${type}ClientList`]
+                );
+
+                if (CONFIG[`${type}ClientList`].length > 0) {
+                        CONFIG[`${type}List`] = CONFIG[`${type}ClientList`]
+                                .map((client) => {
+                                        if (client[`rtspList`]) return client[`rtspLis>                                        if (client[`rtmpList`]) return client[`rtmpLis>                                })
+                                .reduce((prev, curr) => prev.concat(curr));
+                } else {
+                        CONFIG[`${type}ClientList`] = [];
+                        CONFIG[`${type}List`] = [];
+                }
+        });
+
+        CONFIG.allRtspList = []
+                .concat(CONFIG.h264RtspList)
+                .concat(CONFIG.hevcRtspList);
+}
+
+function runMediaServer() {
 	const command = `${MEDIA_SERVER_PATH}`;
 	const mediaServer = SPAWN(command, {
 		shell: true,
@@ -57,19 +91,32 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 			console.log('3333:', dataList);
 
 			for (const data of dataList) {
-				const body = {
-					data: data,
-				};
-				const url = `http://localhost:3000/reloadFFmpeg`;
-				const response = FETCH(url, {
-					method: 'POST',
-					body: JSON.stringify(body),
-					headers: { 'Content-Type': 'application/json' },
-				});
+				for (const type of ['h264', 'hevc']) {
+                                    const rtsp = CONFIG[`${type}RtspList`].find(
+                                        (rtsp) =>
+                                                rtsp
+                                                .split('@')
+                                                .pop()
+                                                .split('/')
+                                                .shift()
+                                                .match(/\d/g)
+                                                .join('') == data.match(/\d/g).join('')                                    
+				    );
+
+                                    if (rtsp) {
+                                        console.log(data);
+                                        RTSPToRTSP(rtsp, type);
+                                    }
+                                }
 			}
 		}
 	});
-})();
+};
+
+(()=>{
+        setRtspList()
+        runMediaServer()
+})()
 
 /* 
     When the program terminates, clear the related background programs.
