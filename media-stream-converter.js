@@ -283,7 +283,7 @@ APP.use(EXPRESS.static(__dirname));
 
 APP.get('/forceReloadSystem', (req, res) => {
 	try {
-		SPAWN(`${PM2_PATH} reload nvr --force`, { shell: true });
+		SPAWN(`${PM2_PATH} reload media-stream-converter --force`, { shell: true });
 		res.send('success');
 	} catch (err) {
 		console.log(err);
