@@ -284,6 +284,7 @@ APP.use(EXPRESS.static(__dirname));
 APP.get('/forceReloadSystem', (req, res) => {
 	try {
 		SPAWN(`${PM2_PATH} reload media-stream-converter --force`, { shell: true });
+		SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
 		res.send('success');
 	} catch (err) {
 		console.log(err);
@@ -309,37 +310,13 @@ APP.post('/updateConfig', (req, res) => {
 			);
 			setRtspList();
 			runProcesses();
+			SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
 		});
 
 		res.send('success');
 	} catch (err) {
 		res.send(err.message);
 		return;
-	}
-});
-
-APP.post('/reloadFFmpeg', (req, res) => {
-	const { data } = req.body;
-
-	for (const type of [`h264`, `hevc`]) {
-		const rtsp = CONFIG[`${type}RtspList`]
-			.filter(
-				(rtsp) =>
-					rtsp
-						.split('@')
-						.pop()
-						.split('/')
-						.shift()
-						.match(/\d/g)
-						.join('') == data.match(/\d/g).join('')
-			)
-			.join(' ');
-
-			if (rtsp) {
-				console.log(data);
-				// RTSP reconnection mechanism.
-				RTSPToRTSP(rtsp, type);
-			}
 	}
 });
 
@@ -369,3 +346,7 @@ process.on('SIGINT', (code) => {
 		{ shell: true }
 	);
 });
+
+module.exports = {
+	RTSPToRTSP,
+};
