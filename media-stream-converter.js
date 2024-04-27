@@ -284,7 +284,10 @@ APP.use(EXPRESS.static(__dirname));
 APP.get('/forceReloadSystem', (req, res) => {
 	try {
 		SPAWN(`${PM2_PATH} reload mediaserver --force`, { shell: true });
-		SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
+		
+		// If you enable the Frame Animation function, please uncomment the following code
+		// SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
+		
 		res.send('success');
 	} catch (err) {
 		console.log(err);
@@ -308,9 +311,12 @@ APP.post('/updateConfig', (req, res) => {
 				`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 				{ shell: true }
 			);
+			
 			setRtspList();
 			runProcesses();
-			SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
+			
+			// If you enable the Frame Animation function, please uncomment the following code
+			// SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
 		});
 
 		res.send('success');
