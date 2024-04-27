@@ -11,30 +11,32 @@ let CONFIG = {};
     Set rtsp list related variables.
 */
 function setRtspList() {
-        const source = JSON.parse(FS.readFileSync(CONFIG_PATH, 'utf8'));
-        const typeList = ['rtmp', 'h264Rtsp', 'hevcRtsp'];
-        CONFIG = JSON.parse(JSON.stringify(source));
-        CONFIG[`clientList`] = [];
+	const source = JSON.parse(FS.readFileSync(CONFIG_PATH, 'utf8'));
+	const typeList = ['rtmp', 'h264Rtsp', 'hevcRtsp'];
+	CONFIG = JSON.parse(JSON.stringify(source));
+	CONFIG[`clientList`] = [];
 
-        typeList.forEach((type) => {
-                CONFIG[`clientList`] = CONFIG[`clientList`].concat(
-                        CONFIG[`${type}ClientList`]
-                );
+	typeList.forEach((type) => {
+		CONFIG[`clientList`] = CONFIG[`clientList`].concat(
+			CONFIG[`${type}ClientList`]
+		);
 
-                if (CONFIG[`${type}ClientList`].length > 0) {
-                        CONFIG[`${type}List`] = CONFIG[`${type}ClientList`]
-                                .map((client) => {
-                                        if (client[`rtspList`]) return client[`rtspLis>                                        if (client[`rtmpList`]) return client[`rtmpLis>                                })
-                                .reduce((prev, curr) => prev.concat(curr));
-                } else {
-                        CONFIG[`${type}ClientList`] = [];
-                        CONFIG[`${type}List`] = [];
-                }
-        });
+		if (CONFIG[`${type}ClientList`].length > 0) {
+			CONFIG[`${type}List`] = CONFIG[`${type}ClientList`]
+				.map((client) => {
+					if (client[`rtspList`]) return client[`rtspList`];
+					if (client[`rtmpList`]) return client[`rtmpList`];
+				})
+				.reduce((prev, curr) => prev.concat(curr));
+		} else {
+			CONFIG[`${type}ClientList`] = [];
+			CONFIG[`${type}List`] = [];
+		}
+	});
 
-        CONFIG.allRtspList = []
-                .concat(CONFIG.h264RtspList)
-                .concat(CONFIG.hevcRtspList);
+	CONFIG.allRtspList = []
+		.concat(CONFIG.h264RtspList)
+		.concat(CONFIG.hevcRtspList);
 }
 
 function runMediaServer() {
