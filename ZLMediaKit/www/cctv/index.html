@@ -1,166 +1,208 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>CCTV</title>
-		<script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.min.js"></script>
-		<script src="./cctv/lib/jessibuca-pro.js"></script>
-	</head>
-	<body>
-		<div id="app">
-			<main-component></main-component>
-		</div>
-		<script type="module">
-			import CLIENT_LIST from './config/config.json' assert { type: 'json' };
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>CCTV</title>
+        <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+        <script src="./cctv/lib/jessibuca-pro.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    </head>
+    <body>
+        <div id="app">
+            <main-component></main-component>
+        </div>
+        <script type="module">
+            setInterval(() => location.reload(), 1000 * 60 * 10); // Reload page automatically.
+			
+	    const DOMAIN_NAME = 'gini-ms.ginibio.com'; // Replace it with your registered domain name.
+	    const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
+            const APP = Vue.createApp({});
 
-			setInterval(() => location.reload(), 1000 * 60 * 30); // Reload page automatically.
-			// setInterval(() => console.clear(), 0); // Clear log endlessly.
+            APP.component("main-component", {
+                template: `
+                <div class="grid">
+                    <div class="flex" v-for="(url, index) in URL_LIST" :key="index">
+                        <div class="container" :ref="(el) => { containerList[index] = el }"></div>
+                    </div>
+                </div>
+            `,
+                data() {
+                    return {
+                        CLIENT_LIST: null,
+                        containerList: [],
+                    };
+                },
+                created() {
+                    axios
+                        .get("./config/config.json")
+                        .then((response) => {
+                            this.CLIENT_LIST = response.data;
+                        })
+                        .catch((e) => {
+                            console.error(e);
+                        });
+                },
+                computed: {
+                    RTMP_CLIENT_LIST() {
+                        if (
+                            this.CLIENT_LIST &&
+                            this.CLIENT_LIST["rtmpClientList"]
+                        ) {
+                            return this.CLIENT_LIST["rtmpClientList"]
+                                .map((client) => client.rtmpList)
+                                .reduce((prev, curr) => prev.concat(curr), [])
+                                .map((rtmp) => rtmp.split("/").pop());
+                        } else {
+                            return [];
+                        }
+                    },
+                    H264_RTSP_CLIENT_LIST() {
+                        if (
+                            this.CLIENT_LIST &&
+                            this.CLIENT_LIST["h264RtspClientList"]
+                        ) {
+                            return this.CLIENT_LIST["h264RtspClientList"]
+                                .map((client) => client.rtspList)
+                                .reduce((prev, curr) => prev.concat(curr), [])
+                                .map((rtsp) =>
+                                    rtsp.split("@").pop().split("/").shift()
+                                );
+                        } else {
+                            return [];
+                        }
+                    },
+                    HEVC_RTSP_CLIENT_LIST() {
+                        if (
+                            this.CLIENT_LIST &&
+                            this.CLIENT_LIST["hevcRtspClientList"]
+                        ) {
+                            return this.CLIENT_LIST["hevcRtspClientList"]
+                                .map((client) => client.rtspList)
+                                .reduce((prev, curr) => prev.concat(curr), [])
+                                .map((rtsp) =>
+                                    rtsp.split("@").pop().split("/").shift()
+                                );
+                        } else {
+                            return [];
+                        }
+                    },
+                    URL_LIST() {
+                        return [
+                            ...new Set(
+                                this.RTMP_CLIENT_LIST.concat(
+                                    this.H264_RTSP_CLIENT_LIST
+                                ).concat(this.HEVC_RTSP_CLIENT_LIST)
+                            ),
+                        ];
+                    },
+                    WSS_LIST() {
+                        return this.URL_LIST.map(
+                            (url) =>
+                                IS_HTTPS
+				    ? `wss://${DOMAIN_NAME}/live/${url}.live.flv`
+				    : `ws://localhost:9080/live/${url}.live.flv`
+                        );
+                    },
+                },
+                watch: {
+                    CLIENT_LIST(newVal, oldVal) {
+                        if (newVal !== null) {
+                            this.$nextTick(() => {
+                                this.init();
+                            });
+                        }
+                    },
+                },
+                methods: {
+                    play(index) {
+                        const playerList = this.$options.playerList;
+                        playerList[index].play(this.WSS_LIST[index]);
+                    },
+                    create(index) {
+                        const playerList = this.$options.playerList;
+                        playerList[index] = new JessibucaPro({
+                            decoder: "./cctv/lib/decoder-pro-simd.js",
+                            container: this.containerList[index],
+                            videoBuffer: 0.1,
+                            videoBufferDelay: 0.2,
+                            isResize: true,
+                            isFlv: true,
+                            hasAudio: false,
+                            loadingText: "",
+                            showBandwidth: false,
+                            timeout: 10,
+                            heartTimeout: 10,
+                            heartTimeoutReplayTimes: -1,
+                            heartTimeoutReplayUseLastFrameShow: true,
+                            loadingTimeout: 10,
+                            loadingTimeoutReplayTimes: -1,
+                            supportDblclickFullscreen: true,
+                            autoWasm: true,
+                            useMSE: true,
+                            useWCS: true,
+                            useSIMD: true,
+                            useWebGPU: true,
+                            replayUseLastFrameShow: true,
+                            demuxUseWorker: true,
+                            operateBtns: {
+                                fullscreen: false,
+                                screenshot: false,
+                                play: false,
+                                audio: false,
+                            },
+                        });
 
-			const DOMAIN_NAME = 'stream.ginibio.com'; // Replace it with your registered domain name.
-			const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
-			const RTMP_CLIENT_LIST =
-				CLIENT_LIST['rtmpClientList'].length > 0
-					? CLIENT_LIST['rtmpClientList']
-							.map((client) => client.rtmpList)
-							.reduce((prev, curr) => prev.concat(curr))
-							.map((rtmp) => rtmp.split('/').pop())
-					: [];
-			const H264_RTSP_CLIENT_LIST =
-				CLIENT_LIST['h264RtspClientList'].length > 0
-					? CLIENT_LIST['h264RtspClientList']
-							.map((client) => client.rtspList)
-							.reduce((prev, curr) => prev.concat(curr))
-							.map((rtsp) =>
-								rtsp.split('@').pop().split('/').shift()
-							)
-					: [];
-			const HEVC_RTSP_CLIENT_LIST =
-				CLIENT_LIST['hevcRtspClientList'].length > 0
-					? CLIENT_LIST['hevcRtspClientList']
-							.map((client) => client.rtspList)
-							.reduce((prev, curr) => prev.concat(curr))
-							.map((rtsp) =>
-								rtsp.split('@').pop().split('/').shift()
-							)
-					: [];
-			const URL_LIST = H264_RTSP_CLIENT_LIST.concat(
-				HEVC_RTSP_CLIENT_LIST
-			).concat(RTMP_CLIENT_LIST);
+                        playerList[index].on("error", (error) => {
+                            console.log(index, error);
+			    playerList[index].pause();
+			    this.play(index);
+                        });
+                    },
+                    init() {
+                        this.$options.playerList = {};
+                        for (
+                            let index = 0;
+                            index < this.WSS_LIST.length;
+                            index++
+                        ) {
+                            this.create(index);
+                            this.play(index);
+                        }
+                    },
+                },
+            });
 
-			const WSS_LIST = URL_LIST.map((url) =>
-				IS_HTTPS
-					? `wss://${DOMAIN_NAME}/live/${url}.live.flv`
-					: `ws://localhost:9080/live/${url}.live.flv`
-			);
-			const APP = Vue.createApp({});
-
-			APP.component('main-component', {
-				template: `
-			                         <div class="grid">
-			                             <div class="flex" v-for="(url, index) in urlList">
-			                                 <div class="title">{{url.split('@').pop().split('/').shift()}}</div>
-			                                 <div class="container" :ref="(el) => { containerList.push(el) }"></div>
-			                             </div>
-			                         </div>
-			                     `,
-				data() {
-					return {
-						urlList: URL_LIST,
-						containerList: [],
-					};
-				},
-				mounted() {
-					this.$options.playerList = {};
-					this.init();
-				},
-				methods: {
-					play(index) {
-						const playerList = this.$options.playerList;
-
-						playerList[index].play(WSS_LIST[index]);
-					},
-					create(index) {
-						const playerList = this.$options.playerList;
-						playerList[index] = new JessibucaPro({
-							decoder: './nvr/lib/decoder-pro-simd.js',
-							container: this.containerList[index],
-							// debug: true,
-							// debugLevel: 'debug',
-							videoBuffer: 0.1,
-							videoBufferDelay: 0.2,
-							isResize: true,
-							isFlv: true,
-							hasAudio: false,
-							loadingText: '',
-							showBandwidth: false,
-							timeout: 10,
-							heartTimeout: 10,
-							heartTimeoutReplayTimes: -1,
-							heartTimeoutReplayUseLastFrameShow: true,
-							loadingTimeout: 10,
-							loadingTimeoutReplayTimes: -1,
-							supportDblclickFullscreen: true,
-							autoWasm: true,
-							useMSE: true,
-							useWCS: true,
-							useSIMD: true,
-							useWebGPU: true,
-							replayUseLastFrameShow: true,
-							demuxUseWorker: true,
-							operateBtns: {
-								fullscreen: false,
-								screenshot: false,
-								play: false,
-								audio: false,
-							},
-						});
-
-						playerList[index].on('error', (error) => {
-							console.log(index, error);
-							playerList[index].pause();
-							this.play(index);
-						});
-					},
-					init() {
-						for (let index = 0; index < WSS_LIST.length; index++) {
-							this.create(index);
-							this.play(index);
-						}
-					},
-				},
-			});
-
-			APP.mount('#app');
-		</script>
-		<style scoped>
-			body {
-				margin: 0;
-				background-color: black;
-			}
-			body::-webkit-scrollbar {
-				display: none;
-			}
-			.grid {
-				display: grid;
-				grid-template-columns: auto auto auto;
-				height: 100vh;
-			}
-			.flex {
-				display: flex;
-				flex-direction: column;
-				justify-content: center;
-				align-items: center;
-				height: 33.3vh;
-			}
-			.title {
-				display: block;
-				font-size: 1.5em;
-				font-weight: bold;
-				color: white;
-				margin: 0.5em 0em 0.5em 0em;
-			}
-		</style>
-	</body>
+            APP.mount("#app");
+        </script>
+        <style scoped>
+            body {
+                margin: 0;
+                background-color: black;
+            }
+            body::-webkit-scrollbar {
+                display: none;
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                height: calc(100vh - 36px);
+            }
+            .flex {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 50vh;
+            }
+            .title {
+                display: block;
+                font-size: 1.5em;
+                font-weight: bold;
+                color: white;
+                margin: 0.5em 0em 0.5em 0em;
+            }
+        </style>
+    </body>
 </html>
