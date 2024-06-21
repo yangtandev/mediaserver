@@ -1,126 +1,126 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Config</title>
-		<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-	</head>
-	<body>
-		<div id="app">
-			<main-component></main-component>
-		</div>
-		<script type="module">
-			import CLIENT_LIST from './config/config.json' assert { type: 'json' };
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <main-component></main-component>
+    </div>
+    <script type="module">
+        const DOMAIN_NAME = 'gini-ms.ginibio.com/api'; // Replace it with your registered domain name.
+        const IS_HTTPS = true; // If you need to use HTTPS, please change it to true
+        const APP = Vue.createApp({});
 
-			const DOMAIN_NAME = 'stream.ginibio.com/api'; // Replace it with your registered domain name.
-			const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
-			const APP = Vue.createApp({});
+        APP.component('main-component', {
+            template: `
+                <textarea ref="textarea" :style="{'height': height}" v-model="value" class="textarea"></textarea>
+                <button @click="updateConfig" class="button">Update Config</button>
+                <button @click="forceReloadSystem" class="button">Force Reload System</button>
+            `,
+            data() {
+                return {
+                    CLIENT_LIST: null,
+                    value: '',
+                    height: '16px',
+                };
+            },
+            created() {
+                axios
+                    .get('./config/config.json')
+                    .then((response) => {
+                        this.CLIENT_LIST = response.data;
+                        this.value = JSON.stringify(this.CLIENT_LIST, null, 4);
+                        this.updateHeight();
+                    })
+                    .catch((e) => {
+                        console.error(e);
+                    });
+            },
+            watch: {
+                value() {
+                    this.updateHeight();
+                },
+            },
+            methods: {
+                updateHeight() {
+                    var count = 1;
+                    for (let i = 0; i < this.value.length; i++) {
+                        if (this.value[i] === '\n') {
+                            count++;
+                        }
+                    }
+                    this.height = `${count * 20}px`;
+                },
+                updateConfig() {
+                    const url = IS_HTTPS
+                        ? `https://${DOMAIN_NAME}/updateConfig`
+                        : 'http://localhost:3000/updateConfig';
+                    axios
+                        .post(url, { data: this.value })
+                        .then((res) => {
+                            const { data } = res;
+                            if (data) {
+                                if (data === 'success') {
+                                    alert('更新成功: 資料已更新!');
+                                    location.reload();
+                                } else if (data.includes('Unexpected token g in JSON')) {
+                                    alert('更新失敗: 格式錯誤!');
+                                } else {
+                                    alert('更新失敗: 系統錯誤!');
+                                }
+                            }
+                        })
+                        .catch((e) => {
+                            console.log(e);
+                        });
+                },
+                forceReloadSystem() {
+                    const url = IS_HTTPS
+                        ? `https://${DOMAIN_NAME}/forceReloadSystem`
+                        : 'http://localhost:3000/forceReloadSystem';
+                    axios
+                        .get(url)
+                        .then((res) => {
+                            const { data } = res;
+                            if (data) {
+                                if (data === 'success') {
+                                    alert('系統已重啟! 請於10秒後重整相關頁面。');
+                                } else {
+                                    alert('系統重啟失敗! 請洽服務人員。');
+                                }
+                            }
+                        })
+                        .catch((e) => {
+                            console.log(e);
+                        });
+                },
+            },
+        });
 
-			APP.component('main-component', {
-				template: `
-			                 <textarea ref="textarea" :style="{'height': height}" v-model="value" class="textarea"></textarea>
-			                 <button @click="updateConfig" class="button">Update Config</button>
-			                 <button @click="forceReloadSystem" class="button">Force Reload System</button>
-			             `,
-				data() {
-					return {
-						value: JSON.stringify(CLIENT_LIST, null, 4),
-						height: '16px',
-					};
-				},
-				mounted() {
-					this.updateHeight();
-				},
-				watch: {
-					value() {
-						this.updateHeight();
-					},
-				},
-				methods: {
-					updateHeight() {
-						var count = 1;
-						for (let i = 0; i < this.value.length; i++) {
-							if (this.value[i] == '\n') {
-								count++;
-							}
-						}
-						this.height = `${count * 20}px`;
-					},
-					updateConfig: function () {
-						const url = IS_HTTPS
-							? `https://${DOMAIN_NAME}/updateConfig`
-							: 'http://localhost:3000/updateConfig';
-						axios
-							.post(url, { data: this.value })
-							.then((res) => {
-								const { data } = res;
-								if (data) {
-									if (data == 'success') {
-										alert('更新成功: 資料已更新!');
-										location.reload();
-									} else if (
-										data.includes(
-											'Unexpected token g in JSON'
-										)
-									) {
-										alert('更新失敗: 格式錯誤!');
-									} else {
-										alert('更新失敗: 系統錯誤!');
-									}
-								}
-							})
-							.catch((e) => {
-								console.log(e);
-							});
-					},
-					forceReloadSystem: function () {
-						const url = IS_HTTPS
-							? `https://${DOMAIN_NAME}/forceReloadSystem`
-							: 'http://localhost:3000/forceReloadSystem';
-
-						axios
-							.get(url)
-							.then((res) => {
-								const { data } = res;
-								if (data) {
-									if (data == 'success') {
-										alert(
-											'系統已重啟! 請於10秒後重整相關頁面。'
-										);
-									} else {
-										alert('系統重啟失敗! 請洽服務人員。');
-									}
-								}
-							})
-							.catch((e) => {
-								console.log(e);
-							});
-					},
-				},
-			});
-
-			APP.mount('#app');
-		</script>
-		<style scoped>
-			.textarea {
-				display: inline-block;
-				width: 100%;
-				/*height: 30px;*/
-				line-height: 20px;
-				font-size: 16px;
-				resize: none;
-				overflow: hidden;
-			}
-			.button {
-				display: block;
-				width: calc(100% + 6px);
-				font-size: 20px;
-				font-weight: bold;
-				line-height: 30px;
-			}
-		</style>
-	</body>
+        APP.mount('#app');
+    </script>
+    <style scoped>
+        .textarea {
+            display: inline-block;
+            width: 100%;
+            line-height: 20px;
+            font-size: 16px;
+            resize: none;
+            overflow: hidden;
+        }
+        .button {
+            display: block;
+            width: calc(100% + 6px);
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 30px;
+        }
+    </style>
+</body>
 </html>
