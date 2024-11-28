@@ -25,7 +25,15 @@ function RTSPToImage(rtsp) {
 
 	IMAGE_COMMANDS[id] = FFMPEG(input);
 	IMAGE_COMMANDS[id]
-		.addInputOption('-rtsp_transport', 'tcp', '-y')
+		.addInputOption(
+                        '-rtsp_transport',
+                        'tcp',
+                        '-vsync',
+                        'passthrough',
+                        '-fflags',
+                        'nobuffer',
+                        '-y'
+		)
 		.addOutputOption(
 			'-vf',
 			'fps=15,scale=720:-1',
