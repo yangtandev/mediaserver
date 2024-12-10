@@ -53,5 +53,5 @@ wss.on('connection', function connection(ws) {
 
 // Start the HTTP server
 server.listen(port, '0.0.0.0', () => {
-	console.log('Server is running on port 5000');
+	console.log('Server is running on port 4000');
 });
