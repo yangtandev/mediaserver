@@ -25,7 +25,7 @@ function RTSPToRTSP(rtsp, type) {
 	const output = `rtsp://localhost:9554/live/${ip}`;
 
 	if (RTSP_COMMANDS.hasOwnProperty(id)) {
-		RTSP_COMMANDS[id].kill('SIGKILL');
+		RTSP_COMMANDS[id].kill('SIGINT');
 	}
 
 	RTSP_COMMANDS[id] = FFMPEG(rtsp);
