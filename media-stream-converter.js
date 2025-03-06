@@ -59,7 +59,7 @@ function RTSPToRTSP(rtsp, type) {
 		.noAudio()
 		.on('stderr', function (err) {
 			if (
-				err.includes('muxing overhead: unknown') ||
+				//err.includes('muxing overhead: unknown') ||
 				err.includes('Error muxing a packet')
 			) {
 				setTimeout(() => {
