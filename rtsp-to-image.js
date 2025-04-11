@@ -30,15 +30,13 @@ function RTSPToImage(rtsp) {
                         'tcp',
                         '-vsync',
                         'passthrough',
-                        '-fflags',
-                        'nobuffer',
+                        '-rtbufsize',
+                        '100M',
                         '-y'
 		)
 		.addOutputOption(
 			'-vf',
-			'fps=15,scale=720:-1',
-			'-b:v',
-			'1M',
+			'fps=1,scale=1920:-1',
 			'-update',
 			'1'
 		)
