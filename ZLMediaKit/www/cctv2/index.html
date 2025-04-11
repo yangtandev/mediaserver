@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>WebSocket Image Viewer</title>
+		<style>
+			body {
+				background-color: black;
+				margin: 0;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 10px;
+				padding: 10px;
+			}
+
+			.grid div {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+
+			img {
+				width: 100%;
+				height: auto;
+				object-fit: contain;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="grid" id="imageGrid"></div>
+
+		<script>
+			document.addEventListener('DOMContentLoaded', function () {
+				const deviceIds = ['19216811'];
+				const grid = document.getElementById('imageGrid');
+
+				// 🔧 Create image containers
+				deviceIds.forEach((id) => {
+					const container = document.createElement('div');
+					container.id = `imageContainer${id}`;
+
+					const img = document.createElement('img');
+					img.id = `imageDisplay${id}`;
+					img.alt = 'Waiting for image...';
+					img.src = '';
+
+					container.appendChild(img);
+					grid.appendChild(container);
+				});
+
+				// 🧠 WebSocket section
+				const ws = new WebSocket('ws://localhost:4000/ws');
+				let lastReceivedTime = Date.now();
+				const maxDelay = 3000;
+				let requestInterval = 1000;
+
+				ws.onopen = () => {
+					console.log('Connected to WebSocket');
+					ws.send(JSON.stringify({ ips: deviceIds }));
+				};
+
+				ws.onmessage = (event) => {
+					try {
+						const data = JSON.parse(event.data);
+						if (!data || typeof data !== 'object') return;
+
+						const currentTime = Date.now();
+						const delay = currentTime - lastReceivedTime;
+						lastReceivedTime = currentTime;
+
+						requestInterval = delay > maxDelay ? 200 : 1000;
+
+						Object.entries(data).forEach(
+							([deviceId, base64Image]) => {
+								const img = document.getElementById(
+									`imageDisplay${deviceId}`
+								);
+								if (img) {
+									img.src = `data:image/jpeg;base64,${base64Image}`;
+								}
+							}
+						);
+
+						setTimeout(() => {
+							ws.send(JSON.stringify({ ips: Object.keys(data) }));
+						}, requestInterval);
+					} catch (error) {
+						console.error(
+							'Error parsing WebSocket message:',
+							error
+						);
+					}
+				};
+
+				ws.onclose = () => {
+					console.log('Disconnected from WebSocket');
+				};
+
+				ws.onerror = (error) => {
+					console.error('WebSocket error:', error);
+				};
+			});
+		</script>
+	</body>
+</html>
