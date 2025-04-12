@@ -3,106 +3,112 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>WebSocket Image Viewer</title>
+		<title>CCTV</title>
 		<style>
-			body {
-				background-color: black;
+			* {
 				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
 			}
-
-			.grid {
+			body {
 				display: grid;
-				grid-template-columns: repeat(3, 1fr);
-				gap: 10px;
-				padding: 10px;
+				grid-template-columns: repeat(5, 1fr);
+				grid-template-rows: repeat(3, 1fr);
+				width: 100vw;
+				height: 100vh;
+				background-color: #000;
+				overflow: hidden;
+				gap: 0;
 			}
-
-			.grid div {
-				display: flex;
-				justify-content: center;
-				align-items: center;
-			}
-
-			img {
+			canvas {
+				/* Display size via CSS, internal resolution handled by attributes */
 				width: 100%;
-				height: auto;
-				object-fit: contain;
+				height: 100%;
+				transform: translateZ(0);
+				backface-visibility: hidden;
 			}
 		</style>
 	</head>
 	<body>
-		<div class="grid" id="imageGrid"></div>
-
 		<script>
-			document.addEventListener('DOMContentLoaded', function () {
-				const deviceIds = ['19216811'];
-				const grid = document.getElementById('imageGrid');
+			const canvases = [];
+			const dpr = window.devicePixelRatio || 1;
+			const ips = ['11816349728081', '11816349728082'];
 
-				// 🔧 Create image containers
-				deviceIds.forEach((id) => {
-					const container = document.createElement('div');
-					container.id = `imageContainer${id}`;
+			// Create canvas elements for each device and adjust for DPR
+			for (let i = 1; i <= ips.length; i++) {
+				const canvas = document.createElement('canvas');
+				const cssWidth = window.innerWidth / 5;
+				const cssHeight = window.innerHeight / 3;
 
-					const img = document.createElement('img');
-					img.id = `imageDisplay${id}`;
-					img.alt = 'Waiting for image...';
-					img.src = '';
+				// Set internal resolution based on device pixel ratio
+				canvas.width = cssWidth * dpr;
+				canvas.height = cssHeight * dpr;
+				canvas.style.width = cssWidth + 'px';
+				canvas.style.height = cssHeight + 'px';
 
-					container.appendChild(img);
-					grid.appendChild(container);
-				});
+				document.body.appendChild(canvas);
+				canvases.push({ canvas, index: i });
+			}
 
-				// 🧠 WebSocket section
-				const ws = new WebSocket('ws://localhost:4000/ws');
-				let lastReceivedTime = Date.now();
-				const maxDelay = 3000;
-				let requestInterval = 1000;
+			// Render image on canvas using offscreen buffer to prevent flickering
+			function updateCanvasImage(canvasObj) {
+				const canvas = canvasObj.canvas;
+				const ctx = canvas.getContext('2d');
 
-				ws.onopen = () => {
-					console.log('Connected to WebSocket');
-					ws.send(JSON.stringify({ ips: deviceIds }));
-				};
+				// Enable high-quality scaling
+				ctx.imageSmoothingEnabled = true;
+				ctx.imageSmoothingQuality = 'high';
 
-				ws.onmessage = (event) => {
-					try {
-						const data = JSON.parse(event.data);
-						if (!data || typeof data !== 'object') return;
+				// Create offscreen canvas for double buffering
+				const offscreen = document.createElement('canvas');
+				offscreen.width = canvas.width;
+				offscreen.height = canvas.height;
+				const offCtx = offscreen.getContext('2d');
+				offCtx.imageSmoothingEnabled = true;
+				offCtx.imageSmoothingQuality = 'high';
 
-						const currentTime = Date.now();
-						const delay = currentTime - lastReceivedTime;
-						lastReceivedTime = currentTime;
+				function loadAndDraw() {
+					const timestamp = new Date().getTime();
+					const ip = ips[canvasObj.index - 1];
+					const imgUrl = `http://localhost:9080/image/${ip}.jpg?t=${timestamp}`;
+					const img = new Image();
+					img.crossOrigin = 'anonymous';
 
-						requestInterval = delay > maxDelay ? 200 : 1000;
+					img.onload = function () {
+						offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
 
-						Object.entries(data).forEach(
-							([deviceId, base64Image]) => {
-								const img = document.getElementById(
-									`imageDisplay${deviceId}`
-								);
-								if (img) {
-									img.src = `data:image/jpeg;base64,${base64Image}`;
-								}
-							}
-						);
+						// Calculate "contain" mode scaling and centering
+						const iw = img.width, ih = img.height;
+						const cw = offscreen.width, ch = offscreen.height;
+						const scale = Math.min(cw / iw, ch / ih);
+						const nw = iw * scale, nh = ih * scale;
+						const dx = (cw - nw) / 2, dy = (ch - nh) / 2;
 
-						setTimeout(() => {
-							ws.send(JSON.stringify({ ips: Object.keys(data) }));
-						}, requestInterval);
-					} catch (error) {
-						console.error(
-							'Error parsing WebSocket message:',
-							error
-						);
-					}
-				};
+						offCtx.drawImage(img, 0, 0, iw, ih, dx, dy, nw, nh);
 
-				ws.onclose = () => {
-					console.log('Disconnected from WebSocket');
-				};
+						requestAnimationFrame(() => {
+							ctx.clearRect(0, 0, canvas.width, canvas.height);
+							ctx.drawImage(offscreen, 0, 0);
+						});
 
-				ws.onerror = (error) => {
-					console.error('WebSocket error:', error);
-				};
+						setTimeout(loadAndDraw, 200);
+					};
+
+					img.onerror = function () {
+						console.warn(`Failed to load image: ${imgUrl}`);
+						setTimeout(loadAndDraw, 1000);
+					};
+
+					img.src = imgUrl;
+				}
+
+				loadAndDraw();
+			}
+
+			// Start rendering loop for each canvas
+			canvases.forEach((item) => {
+				updateCanvasImage(item);
 			});
 		</script>
 	</body>
