@@ -25,7 +25,12 @@ function RTSPToRTSP(rtsp, type) {
 	const output = `rtsp://localhost:9554/live/${ip}`;
 
 	if (RTSP_COMMANDS.hasOwnProperty(id)) {
-		RTSP_COMMANDS[id].kill('SIGINT');
+		try {
+			RTSP_COMMANDS[id].kill('SIGINT');
+			delete RTSP_COMMANDS[id];
+		} catch (e) {
+			console.warn(`Failed to kill ffmpeg for ${id}`, e.message);
+		}
 	}
 
 	RTSP_COMMANDS[id] = FFMPEG(rtsp);
@@ -122,7 +127,12 @@ function RTSPToMP4(rtsp) {
 	output += `/${fileName}.mp4`;
 
 	if (MP4_COMMANDS.hasOwnProperty(id)) {
-		MP4_COMMANDS[id].kill('SIGTERM');
+		try {
+			MP4_COMMANDS[id].kill('SIGINT');
+			delete MP4_COMMANDS[id];
+		} catch (e) {
+			console.warn(`Failed to kill ffmpeg for ${id}`, e.message);
+		}
 	}
 
 	MP4_COMMANDS[id] = FFMPEG(input);
