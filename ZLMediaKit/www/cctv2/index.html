@@ -52,7 +52,7 @@
 								let ip = url.includes('@')
 									? url.split('@').pop().split('/')[0]
 									: url.split('/').pop();
-								return ip.includes(':')
+								return ip.includes('.')
 									? ip.match(/\d+/g).join('')
 									: ip;
 							});
