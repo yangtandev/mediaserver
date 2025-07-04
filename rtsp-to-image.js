@@ -36,7 +36,7 @@ function RTSPToImage(rtsp) {
                         '-vsync',
                         'passthrough',
                         '-rtbufsize',
-                        '100M',
+                        '20M',
                         '-y'
 		)
 		.addOutputOption(
