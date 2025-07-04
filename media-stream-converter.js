@@ -47,8 +47,6 @@ function RTSPToRTSP(rtsp, type) {
 			`${type}_cuvid`
 		)
 		.addOutputOption(
-			'-fps_mode',
-			'passthrough',
 			'-rtsp_transport',
 			'tcp',
 			'-preset',
