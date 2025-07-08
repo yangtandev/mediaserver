@@ -14,7 +14,7 @@ FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
 const RTSP_COMMANDS = {};
 const MP4_COMMANDS = {};
 let CONFIG = {};
-let CONVERT_LIVE_STREAM_TO_MP4 = false
+let CONVERT_LIVE_STREAM_TO_MP4 = false;
 
 /*
     Convert the original RTSP stream to a format acceptable to Media Server.
@@ -25,16 +25,13 @@ function RTSPToRTSP(rtsp, type) {
 	const output = `rtsp://localhost:9554/live/${ip}`;
 
 	if (RTSP_COMMANDS.hasOwnProperty(id)) {
-		try {
-			RTSP_COMMANDS[id].kill('SIGINT');
-			delete RTSP_COMMANDS[id];
-		} catch (e) {
-			console.warn(`Failed to kill ffmpeg for ${id}`, e.message);
-		}
+		console.log(
+			`[INFO] RTSP-to-RTSP conversion for ${id} is already running.`
+		);
+		return;
 	}
 
-	RTSP_COMMANDS[id] = FFMPEG(rtsp);
-	RTSP_COMMANDS[id]
+	const command = FFMPEG(rtsp)
 		.addInputOption(
 			'-rtsp_transport',
 			'tcp',
@@ -60,36 +57,33 @@ function RTSPToRTSP(rtsp, type) {
 		.outputFormat('rtsp')
 		.videoCodec('h264_nvenc')
 		.noAudio()
-		.on('stderr', function (err) {
-			if (
-				//err.includes('muxing overhead: unknown') ||
-				err.includes('Error muxing a packet')
-			) {
-				setTimeout(() => {
-					RTSPToRTSP(rtsp, type);
-				}, 5000);
-			}
+		.on('start', function (cmd) {
+			console.log(`[INFO] Started RTSP-to-RTSP for ${id}: ${cmd}`);
+		})
+		.on('end', function () {
+			console.log(
+				`[INFO] RTSP-to-RTSP process for ${id} finished successfully.`
+			);
+			delete RTSP_COMMANDS[id];
 		})
 		.on('error', function (err, stdout, stderr) {
-			console.log('RTSP', ip, err.message);
+			console.error(
+				`[ERROR] RTSP-to-RTSP process for ${id} failed:`,
+				err.message
+			);
+			delete RTSP_COMMANDS[id];
 
-			if (
-				err.message.includes('Connection refused') ||
-				err.message.includes('Conversion failed') ||
-				err.message.includes('Connection timed out') ||
-				err.message.includes('No route to host') ||
-				err.message.includes('Error opening input file') ||
-				err.message.includes(
-					'Invalid data found when processing input'
-				) ||
-				err.message.includes('Generic error in an external library')
-			) {
-				setTimeout(() => {
-					RTSPToRTSP(rtsp, type);
-				}, 5000);
-			}
-		})
-		.run();
+			// Automatically restart after a delay
+			setTimeout(() => {
+				console.log(
+					`[INFO] Retrying RTSP-to-RTSP conversion for ${rtsp}...`
+				);
+				RTSPToRTSP(rtsp, type);
+			}, 5000);
+		});
+
+	RTSP_COMMANDS[id] = command;
+	command.run();
 }
 
 /*
@@ -101,11 +95,17 @@ function RTSPToMP4(rtsp) {
 		: rtsp.split('/').pop();
 
 	const id = ip.includes(':') ? ip.match(/\d+/g).join('') : ip;
-	const { clientName } = CONFIG.clientList.find((client) => {
+	const clientInfo = CONFIG.clientList.find((client) => {
 		if (client.rtspList) {
 			return client.rtspList.includes(rtsp);
 		}
 	});
+
+	if (!clientInfo) {
+		console.error(`[ERROR] Could not find client info for RTSP: ${rtsp}`);
+		return;
+	}
+	const { clientName } = clientInfo;
 
 	const input = `rtsp://localhost:9554/live/${ip}`;
 	const now = new Date(
@@ -113,28 +113,25 @@ function RTSPToMP4(rtsp) {
 	);
 	const today = now.toISOString().replace(/\:+/g, '-').slice(0, 10);
 	const fileName = now.toISOString().slice(0, -5).split('T').join(' ');
-	let output = BACKUP_PATH;
+	let output_dir = BACKUP_PATH;
 
 	for (let path of [clientName, 'backup', today, ip]) {
-		output += `/${path}`;
-		if (!FS.existsSync(output)) {
-			FS.mkdirSync(output);
+		output_dir += `/${path}`;
+		if (!FS.existsSync(output_dir)) {
+			FS.mkdirSync(output_dir, { recursive: true });
 		}
 	}
 
-	output += `/${fileName}.mp4`;
+	const output_path = `${output_dir}/${fileName}.mp4`;
 
 	if (MP4_COMMANDS.hasOwnProperty(id)) {
-		try {
-			MP4_COMMANDS[id].kill('SIGINT');
-			delete MP4_COMMANDS[id];
-		} catch (e) {
-			console.warn(`Failed to kill ffmpeg for ${id}`, e.message);
-		}
+		console.log(
+			`[INFO] RTSP-to-MP4 conversion for ${id} is already running.`
+		);
+		return;
 	}
 
-	MP4_COMMANDS[id] = FFMPEG(input);
-	MP4_COMMANDS[id]
+	const command = FFMPEG(input)
 		.addInputOption(
 			'-rtsp_transport',
 			'tcp',
@@ -143,7 +140,7 @@ function RTSPToMP4(rtsp) {
 			'-ss',
 			0,
 			'-to',
-			300
+			300 // 5 minutes
 		)
 		.addOutputOption(
 			'-fps_mode',
@@ -159,38 +156,55 @@ function RTSPToMP4(rtsp) {
 		)
 		.videoCodec('h264_nvenc')
 		.noAudio()
-		.on('start', function (commandLine) {})
-		.on('stderr', function (err) {
-			if (err.includes('Error submitting video frame to the encoder')) {
-				setTimeout(() => {
-					RTSPToMP4(rtsp);
-				}, 5000);
-			}
-		})
-		.on('error', function (err, stdout, stderr) {
-			console.log('MP4', ip, err.message);
-			if (
-				err.message.includes('Error opening input file') ||
-				err.message.includes('Error opening output file') ||
-				err.message.includes('Server returned 404 Not Found') ||
-				err.message.includes('Conversion failed')
-			) {
-				setTimeout(() => {
-					RTSPToMP4(rtsp);
-				}, 5000);
-			}
+		.on('start', function (cmd) {
+			console.log(`[INFO] Started RTSP-to-MP4 for ${id}: ${cmd}`);
 		})
 		.on('end', function () {
-			RTSPToMP4(rtsp);
-			FS.stat(output, (error, stats) => {
+			console.log(`[INFO] RTSP-to-MP4 clip for ${id} finished.`);
+			delete MP4_COMMANDS[id]; // Clean up before restarting
+
+			// Check for zero-byte file
+			FS.stat(output_path, (error, stats) => {
 				if (error) {
-					console.log(error);
-				} else if (stats.isFile() && stats.size == 0) {
-					FS.remove(output);
+					console.error(
+						`[ERROR] Could not stat output file ${output_path}:`,
+						error
+					);
+				} else if (stats.isFile() && stats.size === 0) {
+					console.log(
+						`[INFO] Removing zero-byte file: ${output_path}`
+					);
+					FS.unlink(output_path, (err) => {
+						if (err)
+							console.error(
+								`[ERROR] Failed to delete zero-byte file:`,
+								err
+							);
+					});
 				}
 			});
+
+			// Loop to record the next clip
+			RTSPToMP4(rtsp);
 		})
-		.save(output);
+		.on('error', function (err, stdout, stderr) {
+			console.error(
+				`[ERROR] RTSP-to-MP4 process for ${id} failed:`,
+				err.message
+			);
+			delete MP4_COMMANDS[id];
+
+			// Automatically restart after a delay
+			setTimeout(() => {
+				console.log(
+					`[INFO] Retrying RTSP-to-MP4 conversion for ${rtsp}...`
+				);
+				RTSPToMP4(rtsp);
+			}, 5000);
+		})
+		.save(output_path);
+
+	MP4_COMMANDS[id] = command;
 }
 
 /*
@@ -269,7 +283,7 @@ function runProcesses() {
 	if (CONFIG.h264RtspList.length > 0) {
 		CONFIG.h264RtspList.forEach((rtsp) => {
 			RTSPToRTSP(rtsp, 'h264');
-			if(CONVERT_LIVE_STREAM_TO_MP4) {
+			if (CONVERT_LIVE_STREAM_TO_MP4) {
 				RTSPToMP4(rtsp);
 			}
 		});
@@ -278,7 +292,7 @@ function runProcesses() {
 	if (CONFIG.hevcRtspList.length > 0) {
 		CONFIG.hevcRtspList.forEach((rtsp) => {
 			RTSPToRTSP(rtsp, 'hevc');
-			if(CONVERT_LIVE_STREAM_TO_MP4) {
+			if (CONVERT_LIVE_STREAM_TO_MP4) {
 				RTSPToMP4(rtsp);
 			}
 		});
@@ -292,10 +306,10 @@ APP.use(EXPRESS.static(__dirname));
 APP.get('/forceReloadSystem', (req, res) => {
 	try {
 		SPAWN(`${PM2_PATH} reload mediaserver --force`, { shell: true });
-		
+
 		// If you enable the Frame Animation function, please uncomment the following code
 		// SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
-		
+
 		res.send('success');
 	} catch (err) {
 		console.log(err);
@@ -319,10 +333,10 @@ APP.post('/updateConfig', (req, res) => {
 				`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
 				{ shell: true }
 			);
-			
+
 			setRtspList();
 			runProcesses();
-			
+
 			// If you enable the Frame Animation function, please uncomment the following code
 			// SPAWN(`${PM2_PATH} reload rtsp-to-image --force`, { shell: true });
 		});
@@ -338,28 +352,45 @@ SERVER.listen(PORT, '0.0.0.0', () => {
 	setTimeout(() => {
 		setRtspList();
 		runProcesses();
-		if(CONVERT_LIVE_STREAM_TO_MP4) {
+		if (CONVERT_LIVE_STREAM_TO_MP4) {
 			setInterval(clearExpiredBackup, 1000 * 60 * 5);
 		}
 	}, 1000 * 10); // Buffer time reserved for reboot.
 });
 
-/* 
+/*
     When the program terminates, clear the related background programs.
 */
-process.on('SIGINT', (code) => {
-	String('SIGINT')
-		.split('')
-		.forEach((word) => {
-			const slashes = String('|').repeat(30);
-			console.log(`${slashes} ${word} ${slashes}`);
-		});
-
-	const killZombieProcesses = SPAWN(
-		`ps -Al | grep -w Z | awk '{print $4}' | xargs sudo kill -9`,
-		{ shell: true }
+function cleanupAndExit() {
+	console.log(
+		'Received exit signal. Cleaning up all running ffmpeg processes...'
 	);
-});
+	const all_processes = { ...RTSP_COMMANDS, ...MP4_COMMANDS };
+	const running_processes = Object.keys(all_processes);
+
+	if (running_processes.length === 0) {
+		console.log('No ffmpeg processes to kill.');
+		process.exit(0);
+	}
+
+	running_processes.forEach((id) => {
+		console.log(`Killing ffmpeg process for ${id}...`);
+		if (RTSP_COMMANDS[id]) {
+			RTSP_COMMANDS[id].kill('SIGKILL');
+			delete RTSP_COMMANDS[id];
+		}
+		if (MP4_COMMANDS[id]) {
+			MP4_COMMANDS[id].kill('SIGKILL');
+			delete MP4_COMMANDS[id];
+		}
+	});
+
+	// Give a moment for processes to be killed before exiting
+	setTimeout(() => process.exit(0), 100);
+}
+
+process.on('SIGINT', cleanupAndExit);
+process.on('SIGTERM', cleanupAndExit);
 
 module.exports = {
 	RTSPToRTSP,
