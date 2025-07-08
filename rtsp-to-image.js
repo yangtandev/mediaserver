@@ -15,67 +15,52 @@ function RTSPToImage(rtsp) {
 	const input = `rtsp://localhost:9554/live/${ip}`;
 	const output = `${IMAGE_PATH}/${id}.jpg`;
 
-	if (!FS.existsSync(IMAGE_PATH)) {
-		FS.mkdirSync(IMAGE_PATH);
-	}
-
 	if (IMAGE_COMMANDS.hasOwnProperty(id)) {
-		try {
-			IMAGE_COMMANDS[id].kill('SIGINT');
-			delete IMAGE_COMMANDS[id];
-		} catch (e) {
-			console.warn(`Failed to kill ffmpeg for ${id}`, e.message);
-		}
+		console.log(`[INFO] Conversion for ${id} is already running.`);
+		return;
 	}
 
-	IMAGE_COMMANDS[id] = FFMPEG(input);
-	IMAGE_COMMANDS[id]
+	if (!FS.existsSync(IMAGE_PATH)) {
+		FS.mkdirSync(IMAGE_PATH, { recursive: true });
+	}
+
+	const command = FFMPEG(input)
 		.addInputOption(
-                        '-rtsp_transport',
-                        'tcp',
-                        '-vsync',
-                        'passthrough',
-                        '-rtbufsize',
-                        '20M',
-                        '-y'
+			'-rtsp_transport',
+			'tcp',
+			'-vsync',
+			'passthrough',
+			'-rtbufsize',
+			'20M',
+			'-y'
 		)
-		.addOutputOption(
-			'-vf',
-			'fps=1,scale=1920:-1',
-			'-update',
-			'1'
-		)
+		.addOutputOption('-vf', 'fps=1,scale=1920:-1', '-update', '1')
 		.output(output)
-		.on('stderr', function (err) {
-			if (
-				err.includes('muxing overhead: unknown') ||
-				err.includes('Error muxing a packet')
-			) {
-				setTimeout(() => {
-					RTSPToImage(rtsp);
-				}, 5000);
-			}
+		.on('start', function (cmd) {
+			console.log(`[INFO] Started ffmpeg for ${id}: ${cmd}`);
+		})
+		.on('end', function () {
+			console.log(
+				`[INFO] FFMPEG process for ${id} finished successfully.`
+			);
+			delete IMAGE_COMMANDS[id];
 		})
 		.on('error', function (err, stdout, stderr) {
-			console.log('RTSP', ip, err.message);
+			console.error(
+				`[ERROR] FFMPEG process for ${id} failed:`,
+				err.message
+			);
+			delete IMAGE_COMMANDS[id];
 
-			if (
-				err.message.includes('Connection refused') ||
-				err.message.includes('Conversion failed') ||
-				err.message.includes('Connection timed out') ||
-				err.message.includes('No route to host') ||
-				err.message.includes('Error opening input file') ||
-				err.message.includes(
-					'Invalid data found when processing input'
-				) ||
-				err.message.includes('Generic error in an external library')
-			) {
-				setTimeout(() => {
-					RTSPToImage(rtsp);
-				}, 5000);
-			}
-		})
-		.run();
+			// Automatically restart after a delay
+			setTimeout(() => {
+				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
+				RTSPToImage(rtsp);
+			}, 5000);
+		});
+
+	IMAGE_COMMANDS[id] = command;
+	command.run();
 }
 
 /*
@@ -117,3 +102,26 @@ if (CONFIG.allRtspList.length > 0) {
 		RTSPToImage(rtsp);
 	}
 }
+
+function cleanupAndExit() {
+	console.log(
+		'Received exit signal. Cleaning up all running ffmpeg processes...'
+	);
+	const running_processes = Object.keys(IMAGE_COMMANDS);
+	if (running_processes.length === 0) {
+		console.log('No ffmpeg processes to kill.');
+		process.exit(0);
+	}
+
+	running_processes.forEach((id) => {
+		console.log(`Killing ffmpeg process for ${id}...`);
+		IMAGE_COMMANDS[id].kill('SIGKILL'); // Force kill
+		delete IMAGE_COMMANDS[id];
+	});
+
+	// Give a moment for processes to be killed before exiting
+	setTimeout(() => process.exit(0), 100);
+}
+
+process.on('SIGINT', cleanupAndExit);
+process.on('SIGTERM', cleanupAndExit);
