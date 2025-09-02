@@ -32,7 +32,9 @@ function RTSPToImage(rtsp) {
 			'passthrough',
 			'-rtbufsize',
 			'20M',
-			'-y'
+			'-y',
+			'-threads',
+			1
 		)
 		.addOutputOption('-vf', 'fps=1,scale=1920:-1', '-update', '1')
 		.output(output)
