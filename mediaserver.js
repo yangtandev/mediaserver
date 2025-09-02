@@ -56,16 +56,15 @@ function RTSPToRTSP(rtsp, type) {
 	}
 
 	const command = FFMPEG(rtsp)
-		.addInputOption('-rtsp_transport', 'tcp', '-re')
+		.addInputOption('-rtsp_transport', 'tcp', '-re', '-threads',
+			1)
 		.addOutputOption(
 			'-rtsp_transport',
 			'tcp',
 			'-preset',
 			'fast',
 			'-movflags',
-			'faststart',
-			'-threads',
-			1
+			'faststart',			
 		)
 		.output(output)
 		.outputFormat('rtsp')
@@ -79,6 +78,13 @@ function RTSPToRTSP(rtsp, type) {
 				`[INFO] RTSP-to-RTSP process for ${id} finished successfully.`
 			);
 			delete RTSP_COMMANDS[id];
+
+			setTimeout(() => {
+				console.log(
+					`[INFO] Retrying RTSP-to-RTSP conversion for ${rtsp}...`
+				);
+				RTSPToRTSP(rtsp, type);
+			}, 5000);
 		})
 		.on('error', function (err, stdout, stderr) {
 			console.error(
@@ -86,8 +92,7 @@ function RTSPToRTSP(rtsp, type) {
 				err.message
 			);
 			delete RTSP_COMMANDS[id];
-
-			// Automatically restart after a delay
+			
 			setTimeout(() => {
 				console.log(
 					`[INFO] Retrying RTSP-to-RTSP conversion for ${rtsp}...`
@@ -154,7 +159,9 @@ function RTSPToMP4(rtsp) {
 			'-ss',
 			0,
 			'-to',
-			300 // 5 minutes
+			300, // 5 minutes
+			'-threads',
+			2
 		)
 		.addOutputOption(
 			'-fps_mode',
@@ -164,9 +171,7 @@ function RTSPToMP4(rtsp) {
 			'-movflags',
 			'faststart',
 			'-avoid_negative_ts',
-			'make_zero',
-			'-threads',
-			2
+			'make_zero',			
 		)
 		.videoCodec('h264_nvenc')
 		.noAudio()
@@ -208,7 +213,6 @@ function RTSPToMP4(rtsp) {
 			);
 			delete MP4_COMMANDS[id];
 
-			// Automatically restart after a delay
 			setTimeout(() => {
 				console.log(
 					`[INFO] Retrying RTSP-to-MP4 conversion for ${rtsp}...`
