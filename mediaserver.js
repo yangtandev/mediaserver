@@ -11,7 +11,7 @@ const BACKUP_PATH = `./ZLMediaKit/release/linux/Debug/www`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
 const RTSP_COMMANDS = {};
 const MP4_COMMANDS = {};
 let CONFIG = {};
