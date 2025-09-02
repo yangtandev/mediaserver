@@ -65,7 +65,7 @@ function RTSPToRTSP(rtsp, type) {
 			'-movflags',
 			'faststart',
 			'-threads',
-			2
+			1
 		)
 		.output(output)
 		.outputFormat('rtsp')
