@@ -44,6 +44,11 @@ function RTSPToImage(rtsp) {
 				`[INFO] FFMPEG process for ${id} finished successfully.`
 			);
 			delete IMAGE_COMMANDS[id];
+			
+			setTimeout(() => {
+				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
+				RTSPToImage(rtsp);
+			}, 5000);
 		})
 		.on('error', function (err, stdout, stderr) {
 			console.error(
@@ -52,7 +57,6 @@ function RTSPToImage(rtsp) {
 			);
 			delete IMAGE_COMMANDS[id];
 
-			// Automatically restart after a delay
 			setTimeout(() => {
 				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
 				RTSPToImage(rtsp);
