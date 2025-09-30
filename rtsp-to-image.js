@@ -1,4 +1,5 @@
 const FS = require('fs-extra');
+const path = require('path');
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
