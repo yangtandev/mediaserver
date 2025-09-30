@@ -36,7 +36,7 @@ function RTSPToImage(rtsp) {
 			'-threads',
 			1
 		)
-		.addOutputOption('-vf', 'fps=1,scale=1920:-1', '-update', '1')
+		.addOutputOption('-update', '1')
 		.output(output)
 		.on('start', function (cmd) {
 			console.log(`[INFO] Started ffmpeg for ${id}: ${cmd}`);
@@ -67,6 +67,48 @@ function RTSPToImage(rtsp) {
 
 	IMAGE_COMMANDS[id] = command;
 	command.run();
+}
+
+function clearExpiredBackup() {
+        const image_path =
+                '/home/gini/mediaserver/ZLMediaKit/release/linux/Debug/www/image';
+        const thirty_minutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+        FS.readdir(image_path, (err, files) => {
+                if (err) {
+                        console.error('Failed to read the dirctory:', err);
+                        return;
+                }
+
+                const now = Date.now(); // Current time in milliseconds
+
+                files.forEach((file) => {
+                        const file_path = path.join(image_path, file);
+
+                        FS.stat(file_path, (err, stats) => {
+                                if (err) {
+                                        console.error(`Failed to get file stats: ${file}`, err);
+                                        return;
+                                }
+
+                                const file_modified_time = stats.mtime.getTime();
+                                const diff_time = now - file_modified_time;
+
+                                if (diff_time > thirty_minutes) {
+                                        FS.unlink(file_path, (err) => {
+                                                if (err) {
+                                                        console.error(
+                                                                `Failed to delete file: ${file}`,
+                                                                err
+                                                        );
+                                                } else {
+                                                        console.log(`Deleted expired file: ${file}`);
+                                                }
+                                        });
+                                }
+                        });
+                });
+        });
 }
 
 /*
@@ -108,6 +150,9 @@ if (CONFIG.allRtspList.length > 0) {
 		RTSPToImage(rtsp);
 	}
 }
+
+setInterval(clearExpiredBackup, 300000);
+clearExpiredBackup();
 
 function cleanupAndExit() {
 	console.log(
