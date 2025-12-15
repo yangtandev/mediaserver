@@ -1,12 +1,3 @@
-## 建議硬體配置
-
--   Memory: 16 GB 以上
--   Processor: 13th Gen Intel® Core™ i7-13700 x 24 以上
--   Graphics: GeForce GTX 1080 Ti 11GB 以上
--   Disk Capacity: 6.0 TB 以上
--   OS Name: Ubuntu 22.04.3 LTS
--   OS Type: 64-bit
-
 ## 快速啟動
 - 獲取原碼並執行自動安裝檔，Mediaserver 將於安裝完成後自動啟動。  
 ```
@@ -16,25 +7,13 @@ $HOME/mediaserver/setup_mediaserver.sh
 ```
 - 需要 Frame Animation 功能，請執行以下代碼:
 ``` 
-pm2 start $HOME/mediaserver/rtsp-to-image.js --time --cron-restart="*/10 * * * *" && pm2 start $HOME/mediaserver/websocket-server.js --time && pm2 save
+pm2 start $HOME/mediaserver/rtsp-to-image.js --time && pm2 start $HOME/mediaserver/websocket-server.js --time && pm2 save
 ```
 ## 環境需求
 
 -   Git: Latest version
 -   Node.js: 14.16.1 (LTS)  or later  
     請使用 nvm 安裝 Node.js: https://github.com/nvm-sh/nvm
--   PM2: Latest version
--   NVIDIA Display Driver: 535.86.10 or later  
-    NVIDIA Driver 安裝可參考: https://www.nvidia.com/Download/index.aspx
--   CUDA Toolkit: 12.2 or later  
-    CUDA 安裝可參考: https://developer.nvidia.com/cuda-downloads
--   NVIDIA-Patch: Latest version  
-    此為破解顯卡影像編碼最大限制的補丁，安裝可參考: https://github.com/keylase/nvidia-patch
--   FFMpeg: Latest version  
-    安裝可參考:  
-    https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/ffmpeg-with-nvidia-gpu/index.html
-    https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu  
-    https://jackfrisht.medium.com/install-nvidia-driver-via-ppa-in-ubuntu-18-04-fc9a8c4658b9
 -   ZLMediaKit: Latest version  
     按照以下教程開始安裝編譯器、依賴庫、構建和編譯項目: https://github.com/ZLMediaKit/ZLMediaKit/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B
 -   Nginx: Latest version ( For HTTPS )  
