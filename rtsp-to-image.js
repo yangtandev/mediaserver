@@ -1,20 +1,34 @@
 const FS = require('fs-extra');
 const path = require('path');
+const { execSync } = require('child_process');
+
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
+FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+
+function isQsvSupported() {
+    try {
+        execSync("ffmpeg -decoders | grep 'qsv'", { stdio: 'pipe' });
+        console.log('[INFO] QSV hardware acceleration is available.');
+        return true;
+    } catch (error) {
+        console.log('[WARN] QSV hardware acceleration not found. Falling back to software decoding.');
+        return false;
+    }
+}
+
+const IS_QSV_SUPPORTED = isQsvSupported();
 const IMAGE_COMMANDS = {};
 let CONFIG = {};
 
-/*
-    Convert the original RTSP stream to a format acceptable.
-*/
-function RTSPToImage(rtsp) {
+function RTSPToImage(rtsp, type, useHwAccel = false) {
 	const ip = rtsp.split('@').pop();
 	const id = ip.match(/\d+/g).join('');
 	const input = `rtsp://localhost:9554/live/${ip}`;
 	const output = `${IMAGE_PATH}/${id}.jpg`;
+
+	console.warn(`[PERFORMANCE_WARNING] Stream ${id} is configured for high-frequency JPG overwrite. This will cause high I/O and CPU load and is not recommended for production use.`);
 
 	if (IMAGE_COMMANDS.hasOwnProperty(id)) {
 		console.log(`[INFO] Conversion for ${id} is already running.`);
@@ -37,7 +51,9 @@ function RTSPToImage(rtsp) {
 			'-threads',
 			1
 		)
-		.addOutputOption('-update', '1')
+                .outputFormat('image2')
+                .addOutputOption('-vf', 'fps=15')
+                .addOutputOption('-update', '1')
 		.output(output)
 		.on('start', function (cmd) {
 			console.log(`[INFO] Started ffmpeg for ${id}: ${cmd}`);
@@ -50,7 +66,7 @@ function RTSPToImage(rtsp) {
 			
 			setTimeout(() => {
 				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
-				RTSPToImage(rtsp);
+				RTSPToImage(rtsp, type, useHwAccel);
 			}, 5000);
 		})
 		.on('error', function (err, stdout, stderr) {
@@ -60,11 +76,21 @@ function RTSPToImage(rtsp) {
 			);
 			delete IMAGE_COMMANDS[id];
 
+			let retryWithHwAccel = useHwAccel;
+			if (useHwAccel && (err.message.includes('qsv') || err.message.includes('Hardware') || err.message.includes('No such device'))) {
+                console.log(`[INFO] RTSP-to-Image HW acceleration failed for ${id}. Retrying with software.`);
+                retryWithHwAccel = false;
+            }
+
 			setTimeout(() => {
 				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
-				RTSPToImage(rtsp);
+				RTSPToImage(rtsp, type, retryWithHwAccel);
 			}, 5000);
 		});
+
+	if (useHwAccel) {
+		command.addInputOption('-hwaccel', 'qsv');
+	}
 
 	IMAGE_COMMANDS[id] = command;
 	command.run();
@@ -72,8 +98,8 @@ function RTSPToImage(rtsp) {
 
 function clearExpiredBackup() {
         const image_path =
-                '/home/gini/mediaserver/ZLMediaKit/release/linux/Debug/www/image';
-        const thirty_minutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+                './ZLMediaKit/release/linux/Debug/www/image';
+        const thirty_minutes = 30 * 60 * 1000;
 
         FS.readdir(image_path, (err, files) => {
                 if (err) {
@@ -81,7 +107,7 @@ function clearExpiredBackup() {
                         return;
                 }
 
-                const now = Date.now(); // Current time in milliseconds
+                const now = Date.now(); 
 
                 files.forEach((file) => {
                         const file_path = path.join(image_path, file);
@@ -112,9 +138,6 @@ function clearExpiredBackup() {
         });
 }
 
-/*
-    Set rtsp list related variables.
-*/
 function setRtspList() {
 	const source = JSON.parse(FS.readFileSync(CONFIG_PATH, 'utf8'));
 	const typeList = ['rtmp', 'h264Rtsp', 'hevcRtsp'];
@@ -146,9 +169,15 @@ function setRtspList() {
 
 setRtspList();
 
-if (CONFIG.allRtspList.length > 0) {
-	for (const rtsp of CONFIG.allRtspList) {
-		RTSPToImage(rtsp);
+if (CONFIG.h264RtspList && CONFIG.h264RtspList.length > 0) {
+	for (const rtsp of CONFIG.h264RtspList) {
+		RTSPToImage(rtsp, 'h264', IS_QSV_SUPPORTED);
+	}
+}
+
+if (CONFIG.hevcRtspList && CONFIG.hevcRtspList.length > 0) {
+	for (const rtsp of CONFIG.hevcRtspList) {
+		RTSPToImage(rtsp, 'hevc', IS_QSV_SUPPORTED);
 	}
 }
 
@@ -157,22 +186,25 @@ clearExpiredBackup();
 
 function cleanupAndExit() {
 	console.log(
-		'Received exit signal. Cleaning up all running ffmpeg processes...'
+		'Received exit signal. Gracefully cleaning up all running ffmpeg processes...'
 	);
 	const running_processes = Object.keys(IMAGE_COMMANDS);
 	if (running_processes.length === 0) {
 		console.log('No ffmpeg processes to kill.');
-		process.exit(0);
+		return process.exit(0);
 	}
 
 	running_processes.forEach((id) => {
-		console.log(`Killing ffmpeg process for ${id}...`);
-		IMAGE_COMMANDS[id].kill('SIGKILL'); // Force kill
-		delete IMAGE_COMMANDS[id];
+		const cmd = IMAGE_COMMANDS[id];
+		if (cmd) {
+			console.log(`Stopping ffmpeg process for ${id}...`);
+			cmd.removeAllListeners();
+			cmd.kill('SIGTERM'); 
+			delete IMAGE_COMMANDS[id];
+		}
 	});
 
-	// Give a moment for processes to be killed before exiting
-	setTimeout(() => process.exit(0), 100);
+	setTimeout(() => process.exit(0), 500);
 }
 
 process.on('SIGINT', cleanupAndExit);
