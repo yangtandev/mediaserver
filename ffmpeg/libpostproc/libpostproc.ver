@@ -1,7 +1,0 @@
-LIBPOSTPROC_57 {
-    global:
-        postproc_*;
-        pp_*;
-    local:
-        *;
-};

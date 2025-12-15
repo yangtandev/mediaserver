@@ -3,3 +3,6 @@ node_modules/
 # ZLMediaKit
 ZLMediaKit/release/
 ZLMediaKit/build/
+
+# FFmpeg directory
+ffmpeg/
