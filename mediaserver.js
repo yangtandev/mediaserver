@@ -81,7 +81,15 @@ function RTSPToRTSP(rtsp, type) {
 			'faststart'
 		)
 		.output(output)
-		.outputFormat('rtsp')
+		.outputFormat('rtsp');
+
+	if (type === 'hevc') {
+		command.addOutputOption('-bsf:v', 'hevc_mp4toannexb');
+	} else if (type === 'h264') {
+		command.addOutputOption('-bsf:v', 'h264_mp4toannexb');
+	}
+
+	command
 		.videoCodec('copy')
 		.noAudio()
 		.on('start', function (cmd) {

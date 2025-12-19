@@ -51,9 +51,9 @@ function RTSPToImage(rtsp, type, useHwAccel = false) {
 			'-threads',
 			1
 		)
-                .outputFormat('image2')
-                .addOutputOption('-vf', 'fps=15')
-                .addOutputOption('-update', '1')
+                .outputFormat('image2') // Use the image2 muxer for image sequence output
+                .addOutputOption('-vf', 'fps=15') // Set the frame rate
+                .addOutputOption('-update', '1') // Overwrite the same file
 		.output(output)
 		.on('start', function (cmd) {
 			console.log(`[INFO] Started ffmpeg for ${id}: ${cmd}`);
