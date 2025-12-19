@@ -16,5 +16,16 @@
 			"clientName": "gini",
 			"rtspList": ["rtsp://admin:!QAZ2wsx87518499@192.168.2.59:554"]
 		}
-	]
+	],
+        "timelapseClientList": [
+		{
+	            "clientName": "gini",
+	            "rtspList": [
+	                "rtsp://admin:!QAZ87518499@192.168.2.61:554"
+	            ]
+	        }
+	],
+	"retentionDays": 30,
+	"framesPerSecond": 1440,
+	"screenshotFrequencyInSeconds": 60
 }
