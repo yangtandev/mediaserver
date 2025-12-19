@@ -29,6 +29,12 @@ function collectImage(rtsp) {
         return;
     }
 
+    const stats = FS.statSync(sourceImagePath);
+    if (stats.size === 0) {
+        console.warn(`[WARN] Source image for ${ip} (${sourceImagePath}) is zero bytes. Skipping collection.`);
+        return;
+    }
+
     // Destination paths from collect-images.js logic
     const now = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000);
     const today = now.toISOString().slice(0, 10);
@@ -62,6 +68,47 @@ function collectImage(rtsp) {
             console.log(`[INFO] Copied image for ${ip} to ${collectionPath}`);
         }
     });
+}
+
+/*
+    Periodically clear zero-byte files from the backup directories.
+*/
+function clearZeroByteFiles(rtsp) {
+    const ip = rtsp.split('@').pop();
+    const baseImagePath = `${TIME_LAPSE_PATH}/backup/image/${ip}`;
+
+    const scanAndDelete = (directory) => {
+        if (!FS.existsSync(directory)) return;
+        
+        FS.readdir(directory, { withFileTypes: true }, (err, files) => {
+            if (err) {
+                console.error(`[ERROR] Failed to read directory ${directory}:`, err);
+                return;
+            }
+
+            files.forEach(file => {
+                const filePath = `${directory}/${file.name}`;
+                if (file.isDirectory()) {
+                    scanAndDelete(filePath); // Recursive call
+                } else if (file.isFile() && file.name.endsWith('.jpg')) {
+                    FS.stat(filePath, (statErr, stats) => {
+                        if (statErr) {
+                            console.error(`[ERROR] Failed to stat file ${filePath}:`, statErr);
+                            return;
+                        }
+                        if (stats.size === 0) {
+                            console.log(`[INFO] Removing zero-byte file: ${filePath}`);
+                            FS.unlink(filePath, (unlinkErr) => {
+                                if (unlinkErr) console.error(`[ERROR] Failed to delete zero-byte file ${filePath}:`, unlinkErr);
+                            });
+                        }
+                    });
+                }
+            });
+        });
+    };
+
+    scanAndDelete(baseImagePath);
 }
 
 
@@ -183,6 +230,17 @@ SERVER.listen(PORT, () => {
 	console.log(`http://localhost:9080/time-lapse/backup/video`);
 
 	INTERVAL_PROCESS = getInterval();
+
+    // Set up a less frequent interval for cleanup tasks
+    setInterval(() => {
+        setRtspList(); // Ensure we have the latest list
+        if (CONFIG.allRtspList && CONFIG.allRtspList.length > 0) {
+            console.log('[INFO] Running periodic cleanup of zero-byte files...');
+            CONFIG.allRtspList.forEach(rtsp => {
+                clearZeroByteFiles(rtsp);
+            });
+        }
+    }, 3600000); // Run once per hour
 });
 
 function cleanupAndExit() {
