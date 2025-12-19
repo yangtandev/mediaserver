@@ -9,6 +9,12 @@ $HOME/mediaserver/setup_mediaserver.sh
 ``` 
 pm2 start $HOME/mediaserver/rtsp-to-image.js --time && pm2 start $HOME/mediaserver/websocket-server.js --time && pm2 save
 ```
+- 需要縮時攝影功能，請執行以下代碼 (依賴 Frame Animation 功能):
+```
+pm2 start $HOME/mediaserver/collect-images.js --time && pm2 save
+```
+要手動觸發縮時影片的生成，請訪問以下網址 (這會為所有已設定的攝影機觸發生成):
+`http://localhost:4000/generateTimeLapse`
 ## 環境需求
 
 -   Git: Latest version
@@ -56,3 +62,6 @@ pm2 start $HOME/mediaserver/rtsp-to-image.js --time && pm2 start $HOME/mediaserv
    http://localhost:9080/your_client_name/backup
 3. 即時串流影像預覽(cctv): 可觀看註冊於 config 頁中的客戶的攝影機影像串流。  
    http://localhost:9080/cctv
+4. 縮時攝影(Time-lapse): 自動收集排程的影像截圖，並提供功能以將其合成為縮時影片。
+   - 影像收集資料夾: http://localhost:9080/time-lapse/backup/image/
+   - 縮時影片資料夾: http://localhost:9080/time-lapse/backup/video/
