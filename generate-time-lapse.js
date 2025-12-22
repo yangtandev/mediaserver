@@ -1,9 +1,9 @@
 const FS = require('fs-extra');
 const { execSync } = require('child_process');
 const TIME_LAPSE_PATH = `./ZLMediaKit/release/linux/Debug/www/time-lapse`;
-const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/w../config/config.json`;
+const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`./ffmpeg/ffmpeg`);
+FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
 
 function isQsvSupported() {
     try {
@@ -23,7 +23,7 @@ let CONFIG = {};
 /*
     Make a time-lapse film of all the photos in the collection.
 */
-function generateTimeLapse(rtsp) {
+function generateTimeLapse(rtsp, useHwAccel = false) {
 	const ip = rtsp.split('@').pop();
 	const id = ip.match(/\d+/g).join('');
 	const imagePath = `${TIME_LAPSE_PATH}/backup/image/${ip}`;
