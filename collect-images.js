@@ -77,38 +77,36 @@ function clearZeroByteFiles(rtsp) {
     const ip = rtsp.split('@').pop();
     const baseImagePath = `${TIME_LAPSE_PATH}/backup/image/${ip}`;
 
-    const scanAndDelete = (directory) => {
-        if (!FS.existsSync(directory)) return;
-        
-        FS.readdir(directory, { withFileTypes: true }, (err, files) => {
-            if (err) {
-                console.error(`[ERROR] Failed to read directory ${directory}:`, err);
-                return;
-            }
+    const scanAndDeleteSync = (directory) => {
+        if (!FS.existsSync(directory)) {
+            return;
+        }
 
-            files.forEach(file => {
+        try {
+            const files = FS.readdirSync(directory, { withFileTypes: true });
+
+            for (const file of files) {
                 const filePath = `${directory}/${file.name}`;
                 if (file.isDirectory()) {
-                    scanAndDelete(filePath); // Recursive call
+                    scanAndDeleteSync(filePath); // Recursive call
                 } else if (file.isFile() && file.name.endsWith('.jpg')) {
-                    FS.stat(filePath, (statErr, stats) => {
-                        if (statErr) {
-                            console.error(`[ERROR] Failed to stat file ${filePath}:`, statErr);
-                            return;
-                        }
+                    try {
+                        const stats = FS.statSync(filePath);
                         if (stats.size === 0) {
                             console.log(`[INFO] Removing zero-byte file: ${filePath}`);
-                            FS.unlink(filePath, (unlinkErr) => {
-                                if (unlinkErr) console.error(`[ERROR] Failed to delete zero-byte file ${filePath}:`, unlinkErr);
-                            });
+                            FS.unlinkSync(filePath);
                         }
-                    });
+                    } catch (statErr) {
+                        console.error(`[ERROR] Failed to process file ${filePath}:`, statErr);
+                    }
                 }
-            });
-        });
+            }
+        } catch (readErr) {
+            console.error(`[ERROR] Failed to read directory ${directory}:`, readErr);
+        }
     };
 
-    scanAndDelete(baseImagePath);
+    scanAndDeleteSync(baseImagePath);
 }
 
 
