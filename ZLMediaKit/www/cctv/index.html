@@ -1,208 +1,858 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>CCTV</title>
-        <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-        <script src="./cctv/lib/jessibuca-pro.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    </head>
-    <body>
-        <div id="app">
-            <main-component></main-component>
-        </div>
-        <script type="module">
-            setInterval(() => location.reload(), 1000 * 60 * 10); // Reload page automatically.
-			
-	    const DOMAIN_NAME = 'gini-ms.ginibio.com'; // Replace it with your registered domain name.
-	    const IS_HTTPS = false; // If you need to use HTTPS, please change it to true
-            const APP = Vue.createApp({});
+<html lang="zh-TW">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>CCTV</title>
+		<script src="./cctv/lib/jessibuca-pro.js"></script>
+		<style>
+			* {
+				box-sizing: border-box;
+			}
 
-            APP.component("main-component", {
-                template: `
-                <div class="grid">
-                    <div class="flex" v-for="(url, index) in URL_LIST" :key="index">
-                        <div class="container" :ref="(el) => { containerList[index] = el }"></div>
-                    </div>
-                </div>
-            `,
-                data() {
-                    return {
-                        CLIENT_LIST: null,
-                        containerList: [],
-                    };
-                },
-                created() {
-                    axios
-                        .get("./config/config.json")
-                        .then((response) => {
-                            this.CLIENT_LIST = response.data;
-                        })
-                        .catch((e) => {
-                            console.error(e);
-                        });
-                },
-                computed: {
-                    RTMP_CLIENT_LIST() {
-                        if (
-                            this.CLIENT_LIST &&
-                            this.CLIENT_LIST["rtmpClientList"]
-                        ) {
-                            return this.CLIENT_LIST["rtmpClientList"]
-                                .map((client) => client.rtmpList)
-                                .reduce((prev, curr) => prev.concat(curr), [])
-                                .map((rtmp) => rtmp.split("/").pop());
-                        } else {
-                            return [];
-                        }
-                    },
-                    H264_RTSP_CLIENT_LIST() {
-                        if (
-                            this.CLIENT_LIST &&
-                            this.CLIENT_LIST["h264RtspClientList"]
-                        ) {
-                            return this.CLIENT_LIST["h264RtspClientList"]
-                                .map((client) => client.rtspList)
-                                .reduce((prev, curr) => prev.concat(curr), [])
-                                .map((rtsp) =>
-                                    rtsp.split("@").pop().split("/").shift()
-                                );
-                        } else {
-                            return [];
-                        }
-                    },
-                    HEVC_RTSP_CLIENT_LIST() {
-                        if (
-                            this.CLIENT_LIST &&
-                            this.CLIENT_LIST["hevcRtspClientList"]
-                        ) {
-                            return this.CLIENT_LIST["hevcRtspClientList"]
-                                .map((client) => client.rtspList)
-                                .reduce((prev, curr) => prev.concat(curr), [])
-                                .map((rtsp) =>
-                                    rtsp.split("@").pop().split("/").shift()
-                                );
-                        } else {
-                            return [];
-                        }
-                    },
-                    URL_LIST() {
-                        return [
-                            ...new Set(
-                                this.RTMP_CLIENT_LIST.concat(
-                                    this.H264_RTSP_CLIENT_LIST
-                                ).concat(this.HEVC_RTSP_CLIENT_LIST)
-                            ),
-                        ];
-                    },
-                    WSS_LIST() {
-                        return this.URL_LIST.map(
-                            (url) =>
-                                IS_HTTPS
-				    ? `wss://${DOMAIN_NAME}/live/${url}.live.flv`
-				    : `ws://localhost:9080/live/${url}.live.flv`
-                        );
-                    },
-                },
-                watch: {
-                    CLIENT_LIST(newVal, oldVal) {
-                        if (newVal !== null) {
-                            this.$nextTick(() => {
-                                this.init();
-                            });
-                        }
-                    },
-                },
-                methods: {
-                    play(index) {
-                        const playerList = this.$options.playerList;
-                        playerList[index].play(this.WSS_LIST[index]);
-                    },
-                    create(index) {
-                        const playerList = this.$options.playerList;
-                        playerList[index] = new JessibucaPro({
-                            decoder: "./cctv/lib/decoder-pro-simd.js",
-                            container: this.containerList[index],
-                            videoBuffer: 0.1,
-                            videoBufferDelay: 0.2,
-                            isResize: true,
-                            isFlv: true,
-                            hasAudio: false,
-                            loadingText: "",
-                            showBandwidth: false,
-                            timeout: 10,
-                            heartTimeout: 10,
-                            heartTimeoutReplayTimes: -1,
-                            heartTimeoutReplayUseLastFrameShow: true,
-                            loadingTimeout: 10,
-                            loadingTimeoutReplayTimes: -1,
-                            supportDblclickFullscreen: true,
-                            autoWasm: true,
-                            useMSE: true,
-                            useWCS: true,
-                            useSIMD: true,
-                            useWebGPU: true,
-                            replayUseLastFrameShow: true,
-                            demuxUseWorker: true,
-                            operateBtns: {
-                                fullscreen: false,
-                                screenshot: false,
-                                play: false,
-                                audio: false,
-                            },
-                        });
+			body {
+				margin: 0;
+				background: #111417;
+				color: #eef2f3;
+				font-family: Arial, "Noto Sans TC", sans-serif;
+			}
 
-                        playerList[index].on("error", (error) => {
-                            console.log(index, error);
-			    playerList[index].pause();
-			    this.play(index);
-                        });
-                    },
-                    init() {
-                        this.$options.playerList = {};
-                        for (
-                            let index = 0;
-                            index < this.WSS_LIST.length;
-                            index++
-                        ) {
-                            this.create(index);
-                            this.play(index);
-                        }
-                    },
-                },
-            });
+			button,
+			input {
+				font: inherit;
+			}
 
-            APP.mount("#app");
-        </script>
-        <style scoped>
-            body {
-                margin: 0;
-                background-color: black;
-            }
-            body::-webkit-scrollbar {
-                display: none;
-            }
-            .grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                height: calc(100vh - 36px);
-            }
-            .flex {
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                height: 50vh;
-            }
-            .title {
-                display: block;
-                font-size: 1.5em;
-                font-weight: bold;
-                color: white;
-                margin: 0.5em 0em 0.5em 0em;
-            }
-        </style>
-    </body>
+			button {
+				border: 1px solid #3c464d;
+				background: #20262b;
+				color: #f5f7f8;
+				border-radius: 6px;
+				padding: 10px 14px;
+				cursor: pointer;
+			}
+
+			button:hover {
+				background: #2a3238;
+			}
+
+			button.primary {
+				border-color: #2d8068;
+				background: #1f6f5a;
+			}
+
+			button.warn {
+				border-color: #a96928;
+				background: #80501e;
+			}
+
+			button.danger {
+				border-color: #9f4444;
+				background: #733333;
+			}
+
+			button:disabled {
+				cursor: not-allowed;
+				opacity: 0.55;
+			}
+
+			#app {
+				min-height: 100vh;
+			}
+
+			.topbar {
+				position: sticky;
+				top: 0;
+				z-index: 5;
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				height: 58px;
+				padding: 10px 16px;
+				background: #171c20;
+				border-bottom: 1px solid #2a3136;
+			}
+
+			.topbar h1 {
+				margin: 0;
+				font-size: 20px;
+				font-weight: 700;
+			}
+
+			.notice {
+				margin-left: auto;
+				color: #d8c080;
+				font-size: 14px;
+			}
+
+			.menu {
+				padding: 18px;
+			}
+
+			.camera-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+				gap: 14px;
+			}
+
+			.camera-card {
+				overflow: hidden;
+				border: 1px solid #2c343a;
+				border-radius: 8px;
+				background: #181e22;
+				cursor: pointer;
+			}
+
+			.camera-card:hover {
+				border-color: #4a5a63;
+			}
+
+			.cover {
+				position: relative;
+				width: 100%;
+				aspect-ratio: 16 / 9;
+				background: #252b30;
+			}
+
+			.cover img {
+				display: block;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+
+			.placeholder {
+				display: grid;
+				place-items: center;
+				width: 100%;
+				height: 100%;
+				color: #909aa1;
+				font-size: 15px;
+			}
+
+			.badge-row {
+				position: absolute;
+				left: 8px;
+				right: 8px;
+				bottom: 8px;
+				display: flex;
+				gap: 6px;
+				flex-wrap: wrap;
+			}
+
+			.badge {
+				border-radius: 999px;
+				background: rgba(10, 12, 14, 0.78);
+				color: #f2f4f5;
+				padding: 4px 8px;
+				font-size: 12px;
+			}
+
+			.badge.ok {
+				background: rgba(22, 95, 73, 0.85);
+			}
+
+			.badge.warn {
+				background: rgba(132, 83, 29, 0.85);
+			}
+
+			.card-body {
+				padding: 11px 12px 13px;
+			}
+
+			.card-title-row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 10px;
+				margin-bottom: 5px;
+			}
+
+			.cam-name {
+				min-width: 0;
+				font-size: 16px;
+				font-weight: 700;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.cam-meta {
+				color: #aeb8be;
+				font-size: 13px;
+				overflow-wrap: anywhere;
+			}
+
+			.card-actions {
+				display: flex;
+				gap: 8px;
+			}
+
+			.card-actions button {
+				padding: 6px 9px;
+				font-size: 13px;
+				white-space: nowrap;
+			}
+
+			.choice,
+			.player-page {
+				min-height: calc(100vh - 58px);
+				padding: 16px;
+			}
+
+			.choice-panel {
+				max-width: 680px;
+				margin: 42px auto 0;
+				border: 1px solid #303940;
+				border-radius: 8px;
+				background: #181e22;
+				padding: 18px;
+			}
+
+			.choice-title {
+				margin: 0 0 6px;
+				font-size: 22px;
+			}
+
+			.choice-actions,
+			.controls {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				flex-wrap: wrap;
+				margin-top: 16px;
+			}
+
+			.video-shell {
+				height: calc(100vh - 154px);
+				min-height: 360px;
+				border: 1px solid #303940;
+				border-radius: 8px;
+				background: #050607;
+				overflow: hidden;
+			}
+
+			#player,
+			.replay-video {
+				width: 100%;
+				height: 100%;
+			}
+
+			.replay-video {
+				display: block;
+				background: #050607;
+			}
+
+			.duration {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				color: #cbd2d6;
+			}
+
+			.duration input {
+				width: 86px;
+				border: 1px solid #3c464d;
+				border-radius: 6px;
+				background: #111417;
+				color: #f4f6f7;
+				padding: 9px 10px;
+			}
+
+			.progress-wrap {
+				flex: 1 1 260px;
+				min-width: 260px;
+			}
+
+			.progress-text {
+				display: flex;
+				justify-content: space-between;
+				color: #cbd2d6;
+				font-size: 14px;
+				margin-bottom: 6px;
+			}
+
+			.progress {
+				width: 100%;
+				height: 10px;
+				border-radius: 999px;
+				background: #313940;
+				overflow: hidden;
+			}
+
+			.progress div {
+				width: 0;
+				height: 100%;
+				background: #2d8068;
+			}
+
+			.empty {
+				padding: 36px;
+				color: #bac3c8;
+			}
+
+			@media (max-width: 720px) {
+				.topbar {
+					height: auto;
+					align-items: flex-start;
+					flex-direction: column;
+				}
+
+				.notice {
+					margin-left: 0;
+				}
+
+				.video-shell {
+					height: 52vh;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="app"></div>
+
+		<script>
+			const API_BASE =
+				location.protocol === 'https:'
+					? `${location.origin}/api/cctv`
+					: `http://${location.hostname || 'localhost'}:3000/cctv`;
+
+			const state = {
+				view: 'menu',
+				mode: 'live',
+				cameras: [],
+				selected: null,
+				player: null,
+				playerUrl: '',
+				recording: null,
+				timer: null,
+				lastRecordPoll: 0,
+				notice: '',
+			};
+
+			function api(path, options = {}) {
+				return fetch(`${API_BASE}${path}`, {
+					headers: { 'Content-Type': 'application/json' },
+					...options,
+				}).then(async (response) => {
+					const data = await response.json().catch(() => ({}));
+					if (!response.ok) throw new Error(data.error || response.statusText);
+					return data;
+				});
+			}
+
+			function assetUrl(path) {
+				return path ? `./${path}` : '';
+			}
+
+			function liveUrl(cam) {
+				const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+				const host =
+					location.protocol === 'https:'
+						? location.host
+						: `${location.hostname || 'localhost'}:9080`;
+				return `${scheme}://${host}/${cam.livePath}`;
+			}
+
+			function formatTime(seconds) {
+				const sec = Math.max(0, Math.floor(seconds));
+				const mins = Math.floor(sec / 60);
+				const rest = sec % 60;
+				return `${String(mins).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
+			}
+
+			function escapeHtml(value) {
+				return String(value).replace(/[&<>"']/g, (char) => ({
+					'&': '&amp;',
+					'<': '&lt;',
+					'>': '&gt;',
+					'"': '&quot;',
+					"'": '&#39;',
+				})[char]);
+			}
+
+			function destroyPlayer() {
+				if (!state.player) return;
+				try {
+					if (state.player.destroy) state.player.destroy();
+					else state.player.pause();
+				} catch (err) {
+					console.warn(err);
+				}
+				state.player = null;
+				state.playerUrl = '';
+			}
+
+			function mergeCamera(updated) {
+				const index = state.cameras.findIndex((cam) => cam.id === updated.id);
+				if (index !== -1) {
+					state.cameras[index] = {
+						...state.cameras[index],
+						...updated,
+						coverStatus: state.cameras[index].coverStatus,
+					};
+				}
+				if (state.selected && state.selected.id === updated.id) {
+					state.selected = { ...state.selected, ...updated };
+				}
+			}
+
+			async function loadCameras() {
+				state.cameras = await api('/cameras');
+				if (state.selected) {
+					state.selected =
+						state.cameras.find((cam) => cam.id === state.selected.id) || state.selected;
+				}
+			}
+
+			function renderTopbar(title) {
+				const back =
+					state.view === 'menu'
+						? ''
+						: `<button onclick="goMenu()">退回主選單</button>`;
+				return `
+					<div class="topbar">
+						${back}
+						<h1>${title}</h1>
+						<div class="notice">${state.notice || ''}</div>
+					</div>
+				`;
+			}
+
+			function renderMenu() {
+				destroyPlayer();
+				const cards = state.cameras
+					.map((cam) => {
+						const cover = cam.cover
+							? `<img src="${assetUrl(cam.cover.path)}" alt="${escapeHtml(cam.name)}">`
+							: `<div class="placeholder">無封面</div>`;
+						const coverBadge =
+							cam.coverStatus === 'loading'
+								? `<span class="badge">更新中</span>`
+								: cam.coverStatus === 'offline'
+									? `<span class="badge warn">離線</span>`
+									: '';
+						const replayBadge = cam.replay ? `<span class="badge ok">有回放</span>` : '';
+						return `
+							<div class="camera-card" onclick="openCamera('${cam.id}')">
+								<div class="cover">
+									${cover}
+									<div class="badge-row">
+										${replayBadge}
+										${coverBadge}
+									</div>
+								</div>
+								<div class="card-body">
+									<div class="card-title-row">
+										<div class="cam-name">${escapeHtml(cam.name)}</div>
+										<div class="card-actions">
+											<button onclick="renameCameraFromMenu(event, '${cam.id}')">改名</button>
+										</div>
+									</div>
+									<div class="cam-meta">${escapeHtml(cam.ip)}</div>
+								</div>
+							</div>
+						`;
+					})
+					.join('');
+
+				document.getElementById('app').innerHTML = `
+					${renderTopbar('CCTV')}
+					<main class="menu">
+						${cards ? `<div class="camera-grid">${cards}</div>` : `<div class="empty">沒有攝影機</div>`}
+					</main>
+				`;
+			}
+
+			function renderChoice() {
+				destroyPlayer();
+				const cam = state.selected;
+				document.getElementById('app').innerHTML = `
+					${renderTopbar(cam.name)}
+					<main class="choice">
+						<section class="choice-panel">
+							<h2 class="choice-title">${escapeHtml(cam.name)}</h2>
+							<div class="cam-meta">${escapeHtml(cam.ip)}</div>
+							<div class="choice-actions">
+								<button class="primary" onclick="startLive()">播放即時串流</button>
+								<button onclick="startReplay()" ${cam.replay ? '' : 'disabled'}>播放既有回放</button>
+								<button class="danger" onclick="deleteReplay()" ${cam.replay ? '' : 'disabled'}>刪除回放</button>
+							</div>
+						</section>
+					</main>
+				`;
+			}
+
+			function renderPlayer() {
+				const cam = state.selected;
+				const replay = state.mode === 'replay';
+				const recording = state.mode === 'recording';
+				const controls = replay
+					? `
+						<button class="warn" onclick="startLive()">中止回放</button>
+						<button class="danger" onclick="deleteReplay()">刪除回放</button>
+					`
+					: recording
+						? `
+							<div class="progress-wrap">
+								<div class="progress-text">
+									<span id="elapsed">00:00 / ${formatTime(state.recording.durationSec)}</span>
+									<span id="remaining">剩餘 ${formatTime(state.recording.durationSec)}</span>
+								</div>
+								<div class="progress"><div id="progressBar"></div></div>
+							</div>
+							<button class="warn" onclick="stopRecording()">中止並保存</button>
+						`
+						: `
+							<label class="duration">
+								錄製分鐘
+								<input id="durationMinutes" type="number" min="1" max="1440" value="10">
+							</label>
+							<button class="primary" onclick="startRecording()">開始錄制</button>
+						`;
+				const video = replay
+					? `<video class="replay-video" src="${assetUrl(cam.replay.path)}" controls autoplay loop muted playsinline></video>`
+					: `<div id="player"></div>`;
+
+				const currentPlayer = state.player;
+				const currentPlayerUrl = state.playerUrl;
+				const currentPlayerNode = document.getElementById('player');
+				document.getElementById('app').innerHTML = `
+					${renderTopbar(`${cam.name} / ${replay ? '回放' : recording ? '錄製中' : '即時串流'}`)}
+					<main class="player-page">
+						<div class="video-shell">${video}</div>
+						<div class="controls">${controls}</div>
+					</main>
+				`;
+
+				if (replay) {
+					destroyPlayer();
+				} else {
+					if (currentPlayer && currentPlayerNode && currentPlayerUrl === liveUrl(cam)) {
+						document.getElementById('player').replaceWith(currentPlayerNode);
+						state.player = currentPlayer;
+						state.playerUrl = currentPlayerUrl;
+					}
+					mountPlayer();
+				}
+
+				if (recording) updateProgress();
+			}
+
+			function render() {
+				if (state.view === 'menu') renderMenu();
+				else if (state.view === 'choice') renderChoice();
+				else renderPlayer();
+			}
+
+			function mountPlayer() {
+				const url = liveUrl(state.selected);
+				const container = document.getElementById('player');
+				if (!container) return;
+				if (state.player && state.playerUrl === url) return;
+				destroyPlayer();
+
+				state.player = new JessibucaPro({
+					decoder: './cctv/lib/decoder-pro-simd.js',
+					container,
+					videoBuffer: 0.1,
+					videoBufferDelay: 0.2,
+					isResize: true,
+					isFlv: true,
+					hasAudio: false,
+					loadingText: '',
+					showBandwidth: false,
+					timeout: 10,
+					heartTimeout: 10,
+					heartTimeoutReplayTimes: -1,
+					heartTimeoutReplayUseLastFrameShow: true,
+					loadingTimeout: 10,
+					loadingTimeoutReplayTimes: -1,
+					supportDblclickFullscreen: true,
+					autoWasm: true,
+					useMSE: true,
+					useWCS: true,
+					useSIMD: true,
+					useWebGPU: true,
+					replayUseLastFrameShow: true,
+					demuxUseWorker: true,
+					operateBtns: {
+						fullscreen: false,
+						screenshot: false,
+						play: false,
+						audio: false,
+					},
+				});
+				state.playerUrl = url;
+				state.player.on('error', () => {
+					if (!state.player || state.mode === 'replay') return;
+					state.player.pause();
+					state.player.play(url);
+				});
+				state.player.play(url);
+			}
+
+			function openCamera(id) {
+				state.selected = state.cameras.find((cam) => cam.id === id);
+				state.notice = '';
+				if (!state.selected) return;
+				if (state.selected.recording) {
+					enterRecording({ durationSec: 600 });
+					return;
+				}
+				if (state.selected.replay) {
+					state.view = 'choice';
+					render();
+					return;
+				}
+				startLive();
+			}
+
+			function goMenu() {
+				clearInterval(state.timer);
+				state.view = 'menu';
+				state.mode = 'live';
+				state.recording = null;
+				state.notice = '';
+				render();
+			}
+
+			function startLive() {
+				clearInterval(state.timer);
+				state.view = 'player';
+				state.mode = 'live';
+				state.recording = null;
+				state.notice = '';
+				render();
+			}
+
+			function startReplay() {
+				if (!state.selected.replay) {
+					state.notice = '沒有可播放的回放';
+					render();
+					return;
+				}
+				clearInterval(state.timer);
+				state.view = 'player';
+				state.mode = 'replay';
+				state.recording = null;
+				state.notice = '';
+				render();
+			}
+
+			async function renameCamera() {
+				const name = prompt('攝影機名稱', state.selected.name);
+				if (name === null) return;
+				const trimmed = name.trim();
+				if (!trimmed) {
+					state.notice = '名稱不可空白';
+					render();
+					return;
+				}
+
+				try {
+					const updated = await api(`/cameras/${state.selected.id}`, {
+						method: 'PATCH',
+						body: JSON.stringify({ name: trimmed }),
+					});
+					mergeCamera(updated);
+					state.notice = '名稱已更新';
+					render();
+				} catch (err) {
+					state.notice = err.message;
+					render();
+				}
+			}
+
+			function renameCameraFromMenu(event, id) {
+				event.stopPropagation();
+				state.selected = state.cameras.find((cam) => cam.id === id);
+				if (state.selected) renameCamera();
+			}
+
+			function enterRecording(result) {
+				state.view = 'player';
+				state.mode = 'recording';
+				state.recording = {
+					startedMs: result.startedAt ? new Date(result.startedAt).getTime() : Date.now(),
+					durationSec: result.durationSec || 600,
+				};
+				state.lastRecordPoll = 0;
+				render();
+				startTimer();
+			}
+
+			function hasNewReplay() {
+				return Boolean(
+					state.selected &&
+						state.selected.replay &&
+						state.recording &&
+						new Date(state.selected.replay.updatedAt).getTime() >= state.recording.startedMs
+				);
+			}
+
+			async function startRecording() {
+				const input = document.getElementById('durationMinutes');
+				const durationSec = Math.max(60, Math.round(Number(input.value || 10) * 60));
+
+				if (state.selected.replay && !confirm('此 CAM 已有回放，新錄製完成後會覆蓋舊回放。')) {
+					return;
+				}
+
+				try {
+					const result = await api(`/cameras/${state.selected.id}/recordings`, {
+						method: 'POST',
+						body: JSON.stringify({ durationSec }),
+					});
+					state.notice = '';
+					enterRecording(result);
+				} catch (err) {
+					if (err.message === 'recording already running') {
+						await loadCameras();
+						if (state.selected.recording) {
+							state.notice = '錄製已在進行';
+							enterRecording({ durationSec });
+							return;
+						}
+					}
+					state.notice = err.message;
+					render();
+				}
+			}
+
+			function startTimer() {
+				clearInterval(state.timer);
+				state.timer = setInterval(() => {
+					if (!state.recording) return;
+					updateProgress();
+					const elapsed = (Date.now() - state.recording.startedMs) / 1000;
+					if (Date.now() - state.lastRecordPoll > 3000) {
+						state.lastRecordPoll = Date.now();
+						checkRecording();
+					}
+					if (elapsed >= state.recording.durationSec) {
+						clearInterval(state.timer);
+						waitForReplay();
+					}
+				}, 500);
+			}
+
+			async function checkRecording() {
+				if (state.mode !== 'recording' || !state.selected) return;
+				await loadCameras();
+				if (hasNewReplay()) {
+					clearInterval(state.timer);
+					startReplay();
+					return;
+				}
+				if (!state.selected.recording) {
+					clearInterval(state.timer);
+					state.recording = null;
+					state.notice = '錄製失敗或串流中斷';
+					startLive();
+				}
+			}
+
+			function updateProgress() {
+				if (!state.recording) return;
+				const elapsed = Math.min(
+					state.recording.durationSec,
+					(Date.now() - state.recording.startedMs) / 1000
+				);
+				const remaining = Math.max(0, state.recording.durationSec - elapsed);
+				const percent = (elapsed / state.recording.durationSec) * 100;
+				const elapsedNode = document.getElementById('elapsed');
+				const remainingNode = document.getElementById('remaining');
+				const bar = document.getElementById('progressBar');
+				if (elapsedNode) elapsedNode.textContent = `${formatTime(elapsed)} / ${formatTime(state.recording.durationSec)}`;
+				if (remainingNode) remainingNode.textContent = `剩餘 ${formatTime(remaining)}`;
+				if (bar) bar.style.width = `${percent}%`;
+			}
+
+			async function stopRecording() {
+				clearInterval(state.timer);
+				state.notice = '正在保存回放';
+				render();
+				try {
+					await api(`/cameras/${state.selected.id}/recordings/stop`, { method: 'POST' });
+				} catch (err) {
+					state.notice = err.message;
+					render();
+					return;
+				}
+				await waitForReplay();
+			}
+
+			async function waitForReplay() {
+				state.notice = '正在保存回放';
+				render();
+				for (let i = 0; i < 12; i += 1) {
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+					await loadCameras();
+					if (!state.recording || hasNewReplay()) {
+						startReplay();
+						return;
+					}
+				}
+				state.notice = '錄製尚未產生可播放檔案';
+				startLive();
+			}
+
+			async function deleteReplay() {
+				if (!state.selected.replay || !confirm('刪除此 CAM 的回放？')) return;
+				try {
+					const updated = await api(`/cameras/${state.selected.id}/replay`, { method: 'DELETE' });
+					mergeCamera(updated);
+					state.notice = '回放已刪除';
+					state.mode = 'live';
+					state.view = 'player';
+					render();
+				} catch (err) {
+					state.notice = err.message;
+					render();
+				}
+			}
+
+			async function refreshSnapshots() {
+				const queue = [...state.cameras];
+				const worker = async () => {
+					while (queue.length) {
+						const cam = queue.shift();
+						cam.coverStatus = 'loading';
+						if (state.view === 'menu') render();
+						try {
+							const updated = await api(`/cameras/${cam.id}/snapshot`, { method: 'POST' });
+							mergeCamera({ ...updated, coverStatus: '' });
+						} catch (err) {
+							cam.coverStatus = cam.cover ? '' : 'offline';
+						}
+						if (state.view === 'menu') render();
+					}
+				};
+
+				await Promise.all([worker(), worker(), worker()]);
+			}
+
+			(async function init() {
+				try {
+					await loadCameras();
+					render();
+					refreshSnapshots();
+				} catch (err) {
+					state.notice = err.message;
+					render();
+				}
+			})();
+
+			window.openCamera = openCamera;
+			window.goMenu = goMenu;
+			window.startLive = startLive;
+			window.startReplay = startReplay;
+			window.renameCamera = renameCamera;
+			window.renameCameraFromMenu = renameCameraFromMenu;
+			window.startRecording = startRecording;
+			window.stopRecording = stopRecording;
+			window.deleteReplay = deleteReplay;
+		</script>
+	</body>
 </html>
