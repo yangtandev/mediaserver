@@ -720,6 +720,13 @@ APP.post('/updateConfig', (req, res) => {
 				return res.status(500).send('Failed to write config file.');
 			}
 
+			try {
+				setRtspList();
+			} catch (reloadErr) {
+				console.error('[ERROR] Failed to reload config in memory:', reloadErr);
+				return res.status(500).send('Config file written, but failed to reload config.');
+			}
+
 			// 2. 寫入成功後，立刻回傳 success 給前端
 			res.send('success');
 			console.log('[INFO] Config file written, sent success response to client.');

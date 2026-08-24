@@ -1,5 +1,10 @@
 # Release Notes
 
+## v1.1.3 - 2026-08-24
+
+- 修正設定儲存後 CCTV 主選單未立即吃到新 config 的問題。
+- 將安裝腳本改名為 install.sh，避免整支腳本用 sudo 執行造成 PM2 身分混用。
+
 ## v1.1.2 - 2026-08-24
 
 - 強化 mediaserver 安裝腳本，改善執行目錄、依賴安裝與 ZLMediaKit 編譯流程。

@@ -2,8 +2,8 @@
 - 獲取原碼並執行自動安裝檔，Mediaserver 將於安裝完成後自動啟動。  
 ```
 git clone https://github.com/yangtandev/mediaserver.git
-sudo chmod +x $HOME/mediaserver/setup_mediaserver.sh
-$HOME/mediaserver/setup_mediaserver.sh
+chmod +x $HOME/mediaserver/install.sh
+$HOME/mediaserver/install.sh
 ```
 - 需要 Frame Animation 功能，請執行以下代碼:
 ``` 
