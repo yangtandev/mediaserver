@@ -14,7 +14,7 @@ const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const CCTV_DATA_PATH = PATH.join(BACKUP_PATH, 'cctv', 'data');
 const FFMPEG = require('fluent-ffmpeg');
 FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 function isQsvSupported() {
     try {
@@ -61,6 +61,97 @@ function fileInfo(path, publicPath) {
 		size: stat.size,
 		updatedAt: stat.mtime.toISOString(),
 	};
+}
+
+function checkSnapshotQuality(imagePath) {
+	const minBytes = 8192;
+	const width = 64;
+	const height = 36;
+	const pixels = width * height;
+	const stat = FS.statSync(imagePath);
+	if (!stat.isFile() || stat.size < minBytes) {
+		return { ok: false, reason: `too small (${stat.size} bytes)` };
+	}
+
+	let raw;
+	try {
+		raw = execFileSync(
+			'/usr/bin/ffmpeg',
+			[
+				'-v',
+				'error',
+				'-i',
+				imagePath,
+				'-vf',
+				`scale=${width}:${height}:flags=area`,
+				'-f',
+				'rawvideo',
+				'-pix_fmt',
+				'rgb24',
+				'-',
+			],
+			{ maxBuffer: pixels * 3 + 1024 }
+		);
+	} catch (err) {
+		return { ok: false, reason: 'decode failed' };
+	}
+
+	if (raw.length < pixels * 3) return { ok: false, reason: 'incomplete pixels' };
+
+	const gray = new Float32Array(pixels);
+	let sum = 0;
+	let sumSq = 0;
+	let chromaSum = 0;
+	let saturated = 0;
+
+	for (let i = 0, p = 0; i < raw.length; i += 3, p += 1) {
+		const r = raw[i];
+		const g = raw[i + 1];
+		const b = raw[i + 2];
+		const y = (r + g + b) / 3;
+		gray[p] = y;
+		sum += y;
+		sumSq += y * y;
+		chromaSum += Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
+		if (y < 4 || y > 251) saturated += 1;
+	}
+
+	let edgeSum = 0;
+	let edgeCount = 0;
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const index = y * width + x;
+			if (x > 0) {
+				edgeSum += Math.abs(gray[index] - gray[index - 1]);
+				edgeCount += 1;
+			}
+			if (y > 0) {
+				edgeSum += Math.abs(gray[index] - gray[index - width]);
+				edgeCount += 1;
+			}
+		}
+	}
+
+	const mean = sum / pixels;
+	const variance = Math.max(0, sumSq / pixels - mean * mean);
+	const stddev = Math.sqrt(variance);
+	const edge = edgeSum / edgeCount;
+	const chroma = chromaSum / pixels;
+	const saturatedRatio = saturated / pixels;
+
+	if (mean < 6) return { ok: false, reason: `too dark (${mean.toFixed(1)})` };
+	if (mean > 249) return { ok: false, reason: `too bright (${mean.toFixed(1)})` };
+	if (stddev < 7 && edge < 3 && chroma < 12) {
+		return { ok: false, reason: `flat frame (stddev ${stddev.toFixed(1)}, edge ${edge.toFixed(1)})` };
+	}
+	if (saturatedRatio > 0.97) {
+		return { ok: false, reason: `mostly saturated (${Math.round(saturatedRatio * 100)}%)` };
+	}
+	if (stddev > 78 && edge > 85) {
+		return { ok: false, reason: `noisy frame (stddev ${stddev.toFixed(1)}, edge ${edge.toFixed(1)})` };
+	}
+
+	return { ok: true };
 }
 
 function getRtspHost(url) {
@@ -538,7 +629,7 @@ APP.post('/cctv/cameras/:id/snapshot', (req, res) => {
 	let finished = false;
 	const command = FFMPEG(camera.snapshotUrl)
 		.noAudio()
-		.outputOptions('-y', '-frames:v', '1', '-q:v', '3')
+		.outputOptions('-y', '-vf', 'thumbnail=10', '-frames:v', '1', '-q:v', '3')
 		.on('start', (cmd) => {
 			console.log(`[INFO] CCTV snapshot ${camera.id}: ${cmd}`);
 		})
@@ -548,11 +639,22 @@ APP.post('/cctv/cameras/:id/snapshot', (req, res) => {
 			clearTimeout(timeout);
 			delete CCTV_SNAP_COMMANDS[camera.id];
 
+			let snapshotUpdated = false;
 			if (FS.existsSync(tmpPath) && FS.statSync(tmpPath).size > 0) {
-				FS.renameSync(tmpPath, coverPath);
+				const quality = checkSnapshotQuality(tmpPath);
+				if (quality.ok) {
+					FS.renameSync(tmpPath, coverPath);
+					snapshotUpdated = true;
+				} else {
+					FS.rmSync(tmpPath, { force: true });
+					console.warn(`[WARN] CCTV snapshot rejected ${camera.id}: ${quality.reason}`);
+				}
 			}
 
-			res.json(publicCamera(findCctvCamera(camera.id)));
+			res.json({
+				...publicCamera(findCctvCamera(camera.id)),
+				snapshotUpdated,
+			});
 		})
 		.on('error', (err) => {
 			if (finished) return;
@@ -570,8 +672,13 @@ APP.post('/cctv/cameras/:id/snapshot', (req, res) => {
 
 	const timeout = setTimeout(() => {
 		if (finished) return;
+		finished = true;
 		stopTrackedCommand(CCTV_SNAP_COMMANDS, camera.id);
-	}, 8000);
+		delete CCTV_SNAP_COMMANDS[camera.id];
+		if (FS.existsSync(tmpPath)) FS.rmSync(tmpPath, { force: true });
+		console.warn(`[WARN] CCTV snapshot timeout ${camera.id}`);
+		res.status(504).json(publicCamera(findCctvCamera(camera.id)));
+	}, 15000);
 
 	CCTV_SNAP_COMMANDS[camera.id] = { command };
 	command.save(tmpPath);
