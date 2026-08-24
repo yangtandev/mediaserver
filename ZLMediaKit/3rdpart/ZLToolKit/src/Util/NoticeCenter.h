@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <exception>
+#include <stdexcept>
 #include <functional>
 #include <unordered_map>
 #include "function_traits.h"

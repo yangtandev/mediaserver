@@ -34,6 +34,7 @@ documentation and/or software.
 #ifndef SRC_UTIL_MD5_H_
 #define SRC_UTIL_MD5_H_
 
+#include <cstdint>
 #include <string>
 #include <iostream>
 
