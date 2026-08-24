@@ -5,7 +5,7 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>CCTV</title>
-		<script src="./cctv/lib/jessibuca-pro.js"></script>
+		<script src="/cctv/lib/jessibuca-pro.js"></script>
 		<style>
 			* {
 				box-sizing: border-box;
@@ -342,7 +342,13 @@
 			}
 
 			function assetUrl(path) {
-				return path ? `./${path}` : '';
+				return path ? `/${path}` : '';
+			}
+
+			function cacheUrl(path, token) {
+				if (!path) return '';
+				const separator = path.includes('?') ? '&' : '?';
+				return `${assetUrl(path)}${separator}v=${encodeURIComponent(token || Date.now())}`;
 			}
 
 			function liveUrl(cam) {
@@ -386,10 +392,14 @@
 			function mergeCamera(updated) {
 				const index = state.cameras.findIndex((cam) => cam.id === updated.id);
 				if (index !== -1) {
+					const coverStatus =
+						Object.prototype.hasOwnProperty.call(updated, 'coverStatus')
+							? updated.coverStatus
+							: state.cameras[index].coverStatus;
 					state.cameras[index] = {
 						...state.cameras[index],
 						...updated,
-						coverStatus: state.cameras[index].coverStatus,
+						coverStatus,
 					};
 				}
 				if (state.selected && state.selected.id === updated.id) {
@@ -415,6 +425,7 @@
 						${back}
 						<h1>${title}</h1>
 						<div class="notice">${state.notice || ''}</div>
+						<button onclick="openConfig()">設定</button>
 					</div>
 				`;
 			}
@@ -424,7 +435,7 @@
 				const cards = state.cameras
 					.map((cam) => {
 						const cover = cam.cover
-							? `<img src="${assetUrl(cam.cover.path)}" alt="${escapeHtml(cam.name)}">`
+							? `<img src="${cacheUrl(cam.cover.path, `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`)}" alt="${escapeHtml(cam.name)}">`
 							: `<div class="placeholder">無封面</div>`;
 						const coverBadge =
 							cam.coverStatus === 'loading'
@@ -553,7 +564,7 @@
 				destroyPlayer();
 
 				state.player = new JessibucaPro({
-					decoder: './cctv/lib/decoder-pro-simd.js',
+					decoder: '/cctv/lib/decoder-pro-simd.js',
 					container,
 					videoBuffer: 0.1,
 					videoBufferDelay: 0.2,
@@ -615,6 +626,10 @@
 				state.recording = null;
 				state.notice = '';
 				render();
+			}
+
+			function openConfig() {
+				window.location.href = '../config/';
 			}
 
 			function startLive() {
@@ -846,6 +861,7 @@
 
 			window.openCamera = openCamera;
 			window.goMenu = goMenu;
+			window.openConfig = openConfig;
 			window.startLive = startLive;
 			window.startReplay = startReplay;
 			window.renameCamera = renameCamera;

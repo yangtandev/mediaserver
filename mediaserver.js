@@ -29,6 +29,7 @@ function isQsvSupported() {
 
 const IS_QSV_SUPPORTED = isQsvSupported();
 let RTSP_COMMANDS = {};
+let RTSP_RETRY_COUNTS = {};
 let MP4_COMMANDS = {};
 let CCTV_RECORD_COMMANDS = {};
 let CCTV_SNAP_COMMANDS = {};
@@ -105,13 +106,13 @@ function buildCctvCameras() {
 					ip,
 					type,
 					streamId,
-					livePath: `live/${streamId}.live.flv`,
+					livePath: `live/${id}.live.flv`,
 					cover: fileInfo(coverPath, `cctv/data/${id}/cover.jpg`),
 					replay: fileInfo(replayPath, `cctv/data/${id}/replay.mp4`),
 					replayMeta,
 					recording: Boolean(CCTV_RECORD_COMMANDS[id]),
 					sourceUrl: url,
-					recordUrl: type === 'rtmp' ? url : `rtsp://127.0.0.1:9554/live/${streamId}`,
+					recordUrl: type === 'rtmp' ? url : `rtsp://127.0.0.1:9554/live/${id}`,
 					snapshotUrl: url,
 				});
 			});
@@ -178,10 +179,19 @@ function runMediaServer() {
 /*
     Convert the original RTSP stream to a format acceptable to Media Server.
 */
-function RTSPToRTSP(rtsp, type) {
+function RTSPToRTSP(rtsp, type, streamKey) {
 	const ip = rtsp.split('@').pop().split('/').shift();
-	const id = ip.match(/\d+/g).join('');
+	const id = streamKey || ip.match(/\d+/g).join('');
 	const output = `rtsp://localhost:9554/live/${id}`;
+
+	const scheduleRetry = () => {
+		RTSP_RETRY_COUNTS[id] = (RTSP_RETRY_COUNTS[id] || 0) + 1;
+		const delay = Math.min(60000, 5000 * Math.pow(2, RTSP_RETRY_COUNTS[id] - 1));
+		setTimeout(() => {
+			console.log(`[INFO] Retrying RTSP-to-RTSP conversion for ${id} after ${delay}ms...`);
+			RTSPToRTSP(rtsp, type, streamKey);
+		}, delay);
+	};
 
 	if (RTSP_COMMANDS.hasOwnProperty(id)) {
 		console.log(
@@ -191,27 +201,23 @@ function RTSPToRTSP(rtsp, type) {
 	}
 
 	const command = FFMPEG(rtsp)
-		.addInputOption('-rtsp_transport', 'tcp', '-re', '-threads',
-			1)
+		.addInputOption('-rtsp_transport', 'tcp', '-re', '-threads', 1)
 		.addOutputOption(
 			'-map',
 			'0:v:0',
 			'-dn',
 			'-rtsp_transport',
-			'tcp',
-			'-preset',
-			'fast',
-			'-movflags',
-			'faststart'
+			'tcp'
 		)
 		.output(output)
 		.outputFormat('rtsp');
 
 	if (type === 'hevc') {
-		command.videoCodec('libx264').addOutputOption('-tune', 'zerolatency');
+		command
+			.videoCodec('libx264')
+			.addOutputOption('-preset', 'fast', '-tune', 'zerolatency');
 	} else if (type === 'h264') {
 		command.videoCodec('copy');
-		command.addOutputOption('-bsf:v', 'h264_mp4toannexb');
 	}
 
 	command
@@ -225,12 +231,7 @@ function RTSPToRTSP(rtsp, type) {
 			);
 			delete RTSP_COMMANDS[id];
 
-			setTimeout(() => {
-				console.log(
-					`[INFO] Retrying RTSP-to-RTSP conversion for ${rtsp}...`
-				);
-				RTSPToRTSP(rtsp, type);
-			}, 5000);
+			scheduleRetry();
 		})
 		.on('error', function (err, stdout, stderr) {
 			console.error(
@@ -238,13 +239,13 @@ function RTSPToRTSP(rtsp, type) {
 				err.message
 			);
 			delete RTSP_COMMANDS[id];
+
+			if (err.message.includes('Invalid data found')) {
+				console.warn(`[WARN] RTSP-to-RTSP conversion for ${id} stopped. Stream data is incompatible with ${type}.`);
+				return;
+			}
 			
-			setTimeout(() => {
-				console.log(
-					`[INFO] Retrying RTSP-to-RTSP conversion for ${rtsp}...`
-				);
-				RTSPToRTSP(rtsp, type);
-			}, 5000);
+			scheduleRetry();
 		});
 
 	RTSP_COMMANDS[id] = command;
@@ -462,9 +463,16 @@ function clearExpiredBackup() {
     Run all necessary processes.
 */
 function runProcesses() {
+	const cameras = buildCctvCameras().filter((camera) => camera.type !== 'rtmp');
+	const seen = new Set();
+	cameras.forEach((camera) => {
+		if (seen.has(camera.id)) return;
+		seen.add(camera.id);
+		RTSPToRTSP(camera.sourceUrl, camera.type, camera.id);
+	});
+
 	if (CONFIG.h264RtspList.length > 0) {
 		CONFIG.h264RtspList.forEach((rtsp) => {
-			RTSPToRTSP(rtsp, 'h264');
 			if (CONVERT_LIVE_STREAM_TO_MP4) {
 				RTSPToMP4(rtsp, 'h264');
 			}
@@ -473,7 +481,6 @@ function runProcesses() {
 
 	if (CONFIG.hevcRtspList.length > 0) {
 		CONFIG.hevcRtspList.forEach((rtsp) => {
-			RTSPToRTSP(rtsp, 'hevc');
 			if (CONVERT_LIVE_STREAM_TO_MP4) {
 				RTSPToMP4(rtsp, 'hevc');
 			}
