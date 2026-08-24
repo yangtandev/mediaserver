@@ -500,7 +500,7 @@
 				const recording = state.mode === 'recording';
 				const controls = replay
 					? `
-						<button class="warn" onclick="startLive()">中止回放</button>
+						<button class="primary" onclick="startLive()">播放即時串流</button>
 						<button class="danger" onclick="deleteReplay()">刪除回放</button>
 					`
 					: recording
@@ -520,6 +520,7 @@
 								<input id="durationMinutes" type="number" min="1" max="1440" value="10">
 							</label>
 							<button class="primary" onclick="startRecording()">開始錄制</button>
+							${cam.replay ? '<button onclick="startReplay()">播放既有回放</button>' : ''}
 						`;
 				const video = replay
 					? `<video class="replay-video" src="${assetUrl(cam.replay.path)}" controls autoplay loop muted playsinline></video>`
