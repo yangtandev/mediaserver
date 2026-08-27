@@ -26,7 +26,21 @@ if ! command -v pm2 >/dev/null 2>&1; then
 fi
 
 # Get the Dependencies
-sudo apt -qq update -y && sudo apt -y install autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsctp-dev libsdl2-dev libsrtp2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev meson ninja-build pkg-config texinfo wget yasm zlib1g-dev ffmpeg
+sudo apt -qq update -y
+sudo apt -y install autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev libgnutls28-dev libmp3lame-dev libsctp-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev libxcb-shm0-dev libxcb-xfixes0-dev meson ninja-build pkg-config texinfo wget yasm zlib1g-dev
+
+FFMPEG_VERSION="6.1.1"
+FFMPEG_APT_VERSION="$(apt-cache madison ffmpeg | awk -v version="$FFMPEG_VERSION" '$3 ~ "(^|:)" version "([-+]|$)" { print $3; exit }')"
+if [ -z "$FFMPEG_APT_VERSION" ]; then
+	echo "FFmpeg $FFMPEG_VERSION is not available from apt on this system."
+	exit 1
+fi
+
+sudo apt -y install "ffmpeg=$FFMPEG_APT_VERSION"
+/usr/bin/ffmpeg -version | grep -q "^ffmpeg version $FFMPEG_VERSION"
+if [ "$(command -v ffmpeg)" != "/usr/bin/ffmpeg" ]; then
+	echo "Warning: PATH uses $(command -v ffmpeg), but mediaserver uses /usr/bin/ffmpeg $FFMPEG_VERSION."
+fi
 
 # Enter ZLMediaKit directory
 cd ZLMediaKit
