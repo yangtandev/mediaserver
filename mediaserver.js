@@ -13,8 +13,20 @@ const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const CCTV_DATA_PATH = PATH.join(BACKUP_PATH, 'cctv', 'data');
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+const FFMPEG_PATH = '/usr/local/bin/ffmpeg';
+FFMPEG.setFfmpegPath(FFMPEG_PATH);
 const { execFileSync, execSync } = require('child_process');
+
+function isNvencSupported() {
+	try {
+		const encoders = execFileSync(FFMPEG_PATH, ['-hide_banner', '-encoders'], {
+			encoding: 'utf8',
+		});
+		return encoders.includes('h264_nvenc');
+	} catch (error) {
+		return false;
+	}
+}
 
 function isQsvSupported() {
     try {
@@ -28,6 +40,7 @@ function isQsvSupported() {
 }
 
 const IS_QSV_SUPPORTED = isQsvSupported();
+const IS_NVENC_SUPPORTED = isNvencSupported();
 let RTSP_COMMANDS = {};
 let RTSP_RETRY_COUNTS = {};
 let MP4_COMMANDS = {};
@@ -270,17 +283,17 @@ function runMediaServer() {
 /*
     Convert the original RTSP stream to a format acceptable to Media Server.
 */
-function RTSPToRTSP(rtsp, type, streamKey) {
+function RTSPToRTSP(rtsp, type, streamKey, useNvenc = IS_NVENC_SUPPORTED) {
 	const ip = rtsp.split('@').pop().split('/').shift();
 	const id = streamKey || ip.match(/\d+/g).join('');
 	const output = `rtsp://localhost:9554/live/${id}`;
 
-	const scheduleRetry = () => {
+	const scheduleRetry = (nextUseNvenc = useNvenc) => {
 		RTSP_RETRY_COUNTS[id] = (RTSP_RETRY_COUNTS[id] || 0) + 1;
 		const delay = Math.min(60000, 5000 * Math.pow(2, RTSP_RETRY_COUNTS[id] - 1));
 		setTimeout(() => {
 			console.log(`[INFO] Retrying RTSP-to-RTSP conversion for ${id} after ${delay}ms...`);
-			RTSPToRTSP(rtsp, type, streamKey);
+			RTSPToRTSP(rtsp, type, streamKey, nextUseNvenc);
 		}, delay);
 	};
 
@@ -304,9 +317,16 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 		.outputFormat('rtsp');
 
 	if (type === 'hevc') {
-		command
-			.videoCodec('libx264')
-			.addOutputOption('-preset', 'fast', '-tune', 'zerolatency');
+		if (useNvenc) {
+			command
+				.addInputOption('-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda')
+				.videoCodec('h264_nvenc')
+				.addOutputOption('-preset', 'p4', '-tune', 'll', '-zerolatency', '1', '-g', '50');
+		} else {
+			command
+				.videoCodec('libx264')
+				.addOutputOption('-preset', 'fast', '-tune', 'zerolatency');
+		}
 	} else if (type === 'h264') {
 		command.videoCodec('copy');
 	}
@@ -325,18 +345,23 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 			scheduleRetry();
 		})
 		.on('error', function (err, stdout, stderr) {
+			const details = `${err.message}\n${stderr || ''}`;
 			console.error(
 				`[ERROR] RTSP-to-RTSP process for ${id} failed:`,
 				err.message
 			);
 			delete RTSP_COMMANDS[id];
 
-			if (err.message.includes('Invalid data found')) {
+			if (details.includes('Invalid data found')) {
 				console.warn(`[WARN] RTSP-to-RTSP conversion for ${id} stopped. Stream data is incompatible with ${type}.`);
 				return;
 			}
-			
-			scheduleRetry();
+
+			const nvencFailed = useNvenc && /Cannot load libcuda|CUDA_ERROR_|No device available for decoder|Device creation failed|Failed setup for format cuda|OpenEncodeSessionEx failed|InitializeEncoder failed|No NVENC capable devices|No capable devices found|Driver does not support the required nvenc API/i.test(details);
+			if (nvencFailed) {
+				console.warn(`[WARN] NVENC failed for ${id}. Retrying this stream with libx264.`);
+			}
+			scheduleRetry(nvencFailed ? false : useNvenc);
 		});
 
 	RTSP_COMMANDS[id] = command;

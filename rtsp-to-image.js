@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+FFMPEG.setFfmpegPath(`/usr/local/bin/ffmpeg`);
 
 function isQsvSupported() {
     try {
@@ -22,10 +22,22 @@ const IS_QSV_SUPPORTED = isQsvSupported();
 const IMAGE_COMMANDS = {};
 let CONFIG = {};
 
-function RTSPToImage(rtsp, type, useHwAccel = false) {
-	const ip = rtsp.split('@').pop();
-	const id = ip.match(/\d+/g).join('');
-	const input = `rtsp://localhost:9554/live/${ip}`;
+function safeCamId(value) {
+	return String(value).replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function getRtspHost(url) {
+	return url.split('@').pop().split('/').shift();
+}
+
+function getStreamId(url) {
+	return getRtspHost(url).match(/\d+/g).join('');
+}
+
+function RTSPToImage(rtsp, type, clientName, useHwAccel = false) {
+	const id = getStreamId(rtsp);
+	const streamKey = safeCamId(`${type}_${clientName}_${id}`);
+	const input = `rtsp://localhost:9554/live/${streamKey}`;
 	const output = `${IMAGE_PATH}/${id}.jpg`;
 
 	console.warn(`[PERFORMANCE_WARNING] Stream ${id} is configured for high-frequency JPG overwrite. This will cause high I/O and CPU load and is not recommended for production use.`);
@@ -66,7 +78,7 @@ function RTSPToImage(rtsp, type, useHwAccel = false) {
 			
 			setTimeout(() => {
 				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
-				RTSPToImage(rtsp, type, useHwAccel);
+				RTSPToImage(rtsp, type, clientName, useHwAccel);
 			}, 5000);
 		})
 		.on('error', function (err, stdout, stderr) {
@@ -77,14 +89,15 @@ function RTSPToImage(rtsp, type, useHwAccel = false) {
 			delete IMAGE_COMMANDS[id];
 
 			let retryWithHwAccel = useHwAccel;
-			if (useHwAccel && (err.message.includes('qsv') || err.message.includes('Hardware') || err.message.includes('No such device'))) {
+			const ffmpegError = `${err.message}\n${stderr || ''}`;
+			if (useHwAccel && (ffmpegError.includes('qsv') || ffmpegError.includes('Hardware') || ffmpegError.includes('No device'))) {
                 console.log(`[INFO] RTSP-to-Image HW acceleration failed for ${id}. Retrying with software.`);
                 retryWithHwAccel = false;
             }
 
 			setTimeout(() => {
 				console.log(`[INFO] Retrying conversion for ${rtsp}...`);
-				RTSPToImage(rtsp, type, retryWithHwAccel);
+				RTSPToImage(rtsp, type, clientName, retryWithHwAccel);
 			}, 5000);
 		});
 
@@ -169,20 +182,25 @@ function setRtspList() {
 
 setRtspList();
 
-if (CONFIG.h264RtspList && CONFIG.h264RtspList.length > 0) {
-	for (const rtsp of CONFIG.h264RtspList) {
-		RTSPToImage(rtsp, 'h264', IS_QSV_SUPPORTED);
+if (CONFIG.h264RtspClientList && CONFIG.h264RtspClientList.length > 0) {
+	for (const client of CONFIG.h264RtspClientList) {
+		for (const rtsp of client.rtspList || []) {
+			RTSPToImage(rtsp, 'h264', client.clientName, IS_QSV_SUPPORTED);
+		}
 	}
 }
 
-if (CONFIG.hevcRtspList && CONFIG.hevcRtspList.length > 0) {
-	for (const rtsp of CONFIG.hevcRtspList) {
-		RTSPToImage(rtsp, 'hevc', IS_QSV_SUPPORTED);
+if (CONFIG.hevcRtspClientList && CONFIG.hevcRtspClientList.length > 0) {
+	for (const client of CONFIG.hevcRtspClientList) {
+		for (const rtsp of client.rtspList || []) {
+			RTSPToImage(rtsp, 'hevc', client.clientName, IS_QSV_SUPPORTED);
+		}
 	}
 }
 
-setInterval(clearExpiredBackup, 300000);
-clearExpiredBackup();
+// Keep the last screenshot while cameras may be powered off.
+// setInterval(clearExpiredBackup, 300000);
+// clearExpiredBackup();
 
 function cleanupAndExit() {
 	console.log(
