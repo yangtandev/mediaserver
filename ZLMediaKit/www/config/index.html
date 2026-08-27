@@ -1,667 +1,747 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>攝影機設定</title>
-	<style>
-		:root {
-			--bg: #f5f7fa;
-			--panel: #ffffff;
-			--line: #d9e0ea;
-			--text: #16202a;
-			--muted: #637083;
-			--accent: #1464d2;
-			--danger: #c93333;
-			--warn: #a96b00;
-			--ok: #1d7a3a;
-		}
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>攝影機設定</title>
+		<style>
+			:root {
+				--bg: #f5f7fa;
+				--panel: #ffffff;
+				--line: #d9e0ea;
+				--text: #16202a;
+				--muted: #637083;
+				--accent: #1464d2;
+				--danger: #c93333;
+				--warn: #a96b00;
+				--ok: #1d7a3a;
+			}
 
-		* {
-			box-sizing: border-box;
-		}
+			* {
+				box-sizing: border-box;
+			}
 
-		body {
-			margin: 0;
-			background: var(--bg);
-			color: var(--text);
-			font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-		}
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--text);
+				font-family:
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					'Segoe UI',
+					sans-serif;
+			}
 
-		button,
-		input,
-		select,
-		textarea {
-			font: inherit;
-		}
+			button,
+			input,
+			select,
+			textarea {
+				font: inherit;
+			}
 
-		button {
-			border: 1px solid var(--line);
-			border-radius: 6px;
-			background: var(--panel);
-			color: var(--text);
-			padding: 8px 12px;
-			cursor: pointer;
-		}
+			button {
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: var(--panel);
+				color: var(--text);
+				padding: 8px 12px;
+				cursor: pointer;
+			}
 
-		button:hover {
-			border-color: var(--accent);
-		}
+			button:hover {
+				border-color: var(--accent);
+			}
 
-		button.primary {
-			border-color: var(--accent);
-			background: var(--accent);
-			color: #fff;
-		}
+			button.primary {
+				border-color: var(--accent);
+				background: var(--accent);
+				color: #fff;
+			}
 
-		button.danger {
-			border-color: #efb1b1;
-			color: var(--danger);
-		}
+			button.danger {
+				border-color: #efb1b1;
+				color: var(--danger);
+			}
 
-		button:disabled {
-			cursor: not-allowed;
-			opacity: .55;
-		}
+			button:disabled {
+				cursor: not-allowed;
+				opacity: 0.55;
+			}
 
-		input,
-		select,
-		textarea {
-			width: 100%;
-			border: 1px solid var(--line);
-			border-radius: 6px;
-			background: #fff;
-			color: var(--text);
-			padding: 9px 10px;
-		}
+			input,
+			select,
+			textarea {
+				width: 100%;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: #fff;
+				color: var(--text);
+				padding: 9px 10px;
+			}
 
-		textarea {
-			min-height: 420px;
-			resize: vertical;
-			font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-			font-size: 13px;
-			line-height: 1.5;
-		}
+			textarea {
+				min-height: 420px;
+				resize: vertical;
+				font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+				font-size: 13px;
+				line-height: 1.5;
+			}
 
-		.shell {
-			max-width: 1180px;
-			margin: 0 auto;
-			padding: 22px;
-		}
-
-		.topbar {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 16px;
-			margin-bottom: 16px;
-		}
-
-		h1 {
-			margin: 0;
-			font-size: 24px;
-			line-height: 1.2;
-		}
-
-		.actions,
-		.tabs,
-		.card-actions {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			flex-wrap: wrap;
-		}
-
-		.notice {
-			min-height: 22px;
-			margin-bottom: 12px;
-			color: var(--muted);
-		}
-
-		.notice.error {
-			color: var(--danger);
-		}
-
-		.tabs {
-			margin-bottom: 14px;
-		}
-
-		.tab.active {
-			border-color: var(--accent);
-			background: #eaf2ff;
-			color: #0b55b4;
-		}
-
-		.toolbar {
-			display: grid;
-			grid-template-columns: minmax(220px, 1fr) auto;
-			gap: 10px;
-			margin-bottom: 14px;
-		}
-
-		.summary {
-			display: grid;
-			grid-template-columns: repeat(4, minmax(0, 1fr));
-			gap: 10px;
-			margin-bottom: 14px;
-		}
-
-		.metric,
-		.card,
-		.editor,
-		.advanced {
-			border: 1px solid var(--line);
-			border-radius: 8px;
-			background: var(--panel);
-		}
-
-		.metric {
-			padding: 12px;
-		}
-
-		.metric strong {
-			display: block;
-			font-size: 22px;
-		}
-
-		.metric span,
-		.meta,
-		.help {
-			color: var(--muted);
-			font-size: 13px;
-		}
-
-		.grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-			gap: 12px;
-		}
-
-		.card {
-			padding: 14px;
-		}
-
-		.card.invalid {
-			border-color: #efb1b1;
-		}
-
-		.card-head {
-			display: flex;
-			align-items: flex-start;
-			justify-content: space-between;
-			gap: 10px;
-			margin-bottom: 12px;
-		}
-
-		.name {
-			font-weight: 700;
-			word-break: break-word;
-		}
-
-		.badge {
-			display: inline-flex;
-			align-items: center;
-			border-radius: 999px;
-			background: #edf1f5;
-			color: #425065;
-			padding: 3px 8px;
-			font-size: 12px;
-			white-space: nowrap;
-		}
-
-		.badge.warn {
-			background: #fff4dd;
-			color: var(--warn);
-		}
-
-		.badge.ok {
-			background: #e6f5eb;
-			color: var(--ok);
-		}
-
-		.url {
-			margin: 8px 0 12px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			color: var(--muted);
-			font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-			font-size: 12px;
-		}
-
-		.editor {
-			margin-top: 16px;
-			padding: 16px;
-		}
-
-		.editor h2 {
-			margin: 0 0 12px;
-			font-size: 18px;
-		}
-
-		.form-grid {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: 12px;
-		}
-
-		.field.full {
-			grid-column: 1 / -1;
-		}
-
-		label {
-			display: block;
-			margin-bottom: 6px;
-			color: var(--muted);
-			font-size: 13px;
-		}
-
-		.form-actions {
-			display: flex;
-			justify-content: space-between;
-			gap: 10px;
-			margin-top: 14px;
-		}
-
-		.advanced {
-			padding: 16px;
-		}
-
-		.empty {
-			border: 1px dashed var(--line);
-			border-radius: 8px;
-			padding: 28px;
-			text-align: center;
-			color: var(--muted);
-			background: rgba(255, 255, 255, .55);
-		}
-
-		@media (max-width: 760px) {
 			.shell {
+				max-width: 1180px;
+				margin: 0 auto;
+				padding: 22px;
+			}
+
+			.topbar {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				margin-bottom: 16px;
+			}
+
+			h1 {
+				margin: 0;
+				font-size: 24px;
+				line-height: 1.2;
+			}
+
+			.actions,
+			.tabs,
+			.card-actions {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				flex-wrap: wrap;
+			}
+
+			.notice {
+				min-height: 22px;
+				margin-bottom: 12px;
+				color: var(--muted);
+			}
+
+			.notice.error {
+				color: var(--danger);
+			}
+
+			.tabs {
+				margin-bottom: 14px;
+			}
+
+			.tab.active {
+				border-color: var(--accent);
+				background: #eaf2ff;
+				color: #0b55b4;
+			}
+
+			.toolbar {
+				display: grid;
+				grid-template-columns: minmax(220px, 1fr) auto;
+				gap: 10px;
+				margin-bottom: 14px;
+			}
+
+			.summary {
+				display: grid;
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				gap: 10px;
+				margin-bottom: 14px;
+			}
+
+			.metric,
+			.card,
+			.editor,
+			.advanced {
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				background: var(--panel);
+			}
+
+			.metric {
+				padding: 12px;
+			}
+
+			.metric strong {
+				display: block;
+				font-size: 22px;
+			}
+
+			.metric span,
+			.meta,
+			.help {
+				color: var(--muted);
+				font-size: 13px;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+				gap: 12px;
+			}
+
+			.card {
 				padding: 14px;
 			}
 
-			.topbar,
-			.form-actions {
-				align-items: stretch;
-				flex-direction: column;
+			.card.invalid {
+				border-color: #efb1b1;
 			}
 
-			.toolbar,
-			.summary,
+			.card-head {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 10px;
+				margin-bottom: 12px;
+			}
+
+			.name {
+				font-weight: 700;
+				word-break: break-word;
+			}
+
+			.badge {
+				display: inline-flex;
+				align-items: center;
+				border-radius: 999px;
+				background: #edf1f5;
+				color: #425065;
+				padding: 3px 8px;
+				font-size: 12px;
+				white-space: nowrap;
+			}
+
+			.badge.warn {
+				background: #fff4dd;
+				color: var(--warn);
+			}
+
+			.badge.ok {
+				background: #e6f5eb;
+				color: var(--ok);
+			}
+
+			.url {
+				margin: 8px 0 12px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				color: var(--muted);
+				font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+				font-size: 12px;
+			}
+
+			.editor {
+				margin-top: 16px;
+				padding: 16px;
+			}
+
+			.editor h2 {
+				margin: 0 0 12px;
+				font-size: 18px;
+			}
+
 			.form-grid {
-				grid-template-columns: 1fr;
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 12px;
 			}
-		}
-	</style>
-</head>
-<body>
-	<div id="app"></div>
 
-	<script>
-		const API_BASE = 'http://localhost:3000';
-		const GROUPS = [
-			{ key: 'h264RtspClientList', label: 'RTSP H264', listKey: 'rtspList', scheme: 'rtsp://' },
-			{ key: 'hevcRtspClientList', label: 'RTSP HEVC', listKey: 'rtspList', scheme: 'rtsp://' },
-			{ key: 'rtmpClientList', label: 'RTMP', listKey: 'rtmpList', scheme: 'rtmp://' },
-			{ key: 'timelapseClientList', label: 'Timelapse', listKey: 'rtspList', scheme: 'rtsp://' },
-		];
-
-		const state = {
-			config: null,
-			rows: [],
-			active: GROUPS[0].key,
-			selectedId: '',
-			search: '',
-			notice: '讀取中',
-			error: '',
-			dirty: false,
-			advanced: false,
-			jsonText: '',
-			draft: null,
-			composingSearch: false,
-			searchTimer: null,
-		};
-
-		function uid() {
-			return `cam_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-		}
-
-		function escapeHtml(value) {
-			return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-				'&': '&amp;',
-				'<': '&lt;',
-				'>': '&gt;',
-				'"': '&quot;',
-				"'": '&#39;',
-			})[char]);
-		}
-
-		function getGroup(key) {
-			return GROUPS.find((group) => group.key === key) || GROUPS[0];
-		}
-
-		function rowName(row) {
-			return row.cameraName || row.clientName || '未命名 CAM';
-		}
-
-		function urlHost(url) {
-			try {
-				return new URL(url).host || '-';
-			} catch (err) {
-				return '-';
+			.field.full {
+				grid-column: 1 / -1;
 			}
-		}
 
-		function flattenConfig(config) {
-			const rows = [];
-			GROUPS.forEach((group) => {
-				(config[group.key] || []).forEach((client) => {
-					(client[group.listKey] || []).forEach((url, index) => {
-						const extra = { ...client };
-						delete extra[group.listKey];
-						rows.push({
-							id: uid(),
-							groupKey: group.key,
-							clientName: client.clientName || '',
-							cameraName: client.cameraName || client.camName || '',
-							url,
-							extra,
-							sourceIndex: index,
+			label {
+				display: block;
+				margin-bottom: 6px;
+				color: var(--muted);
+				font-size: 13px;
+			}
+
+			.form-actions {
+				display: flex;
+				justify-content: space-between;
+				gap: 10px;
+				margin-top: 14px;
+			}
+
+			.advanced {
+				padding: 16px;
+			}
+
+			.empty {
+				border: 1px dashed var(--line);
+				border-radius: 8px;
+				padding: 28px;
+				text-align: center;
+				color: var(--muted);
+				background: rgba(255, 255, 255, 0.55);
+			}
+
+			@media (max-width: 760px) {
+				.shell {
+					padding: 14px;
+				}
+
+				.topbar,
+				.form-actions {
+					align-items: stretch;
+					flex-direction: column;
+				}
+
+				.toolbar,
+				.summary,
+				.form-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="app"></div>
+
+		<script>
+			const API_BASE = 'https://gini-ms.ginibio.com/api';
+			const GROUPS = [
+				{
+					key: 'h264RtspClientList',
+					label: 'RTSP H264',
+					listKey: 'rtspList',
+					scheme: 'rtsp://',
+				},
+				{
+					key: 'hevcRtspClientList',
+					label: 'RTSP HEVC',
+					listKey: 'rtspList',
+					scheme: 'rtsp://',
+				},
+				{
+					key: 'rtmpClientList',
+					label: 'RTMP',
+					listKey: 'rtmpList',
+					scheme: 'rtmp://',
+				},
+				{
+					key: 'timelapseClientList',
+					label: 'Timelapse',
+					listKey: 'rtspList',
+					scheme: 'rtsp://',
+				},
+			];
+
+			const state = {
+				config: null,
+				rows: [],
+				active: GROUPS[0].key,
+				selectedId: '',
+				search: '',
+				notice: '讀取中',
+				error: '',
+				dirty: false,
+				advanced: false,
+				jsonText: '',
+				draft: null,
+				composingSearch: false,
+				searchTimer: null,
+			};
+
+			function uid() {
+				return `cam_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+			}
+
+			function escapeHtml(value) {
+				return String(value ?? '').replace(
+					/[&<>"']/g,
+					(char) =>
+						({
+							'&': '&amp;',
+							'<': '&lt;',
+							'>': '&gt;',
+							'"': '&quot;',
+							"'": '&#39;',
+						})[char],
+				);
+			}
+
+			function getGroup(key) {
+				return GROUPS.find((group) => group.key === key) || GROUPS[0];
+			}
+
+			function rowName(row) {
+				return row.cameraName || row.clientName || '未命名 CAM';
+			}
+
+			function urlHost(url) {
+				try {
+					return new URL(url).host || '-';
+				} catch (err) {
+					return '-';
+				}
+			}
+
+			function flattenConfig(config) {
+				const rows = [];
+				GROUPS.forEach((group) => {
+					(config[group.key] || []).forEach((client) => {
+						(client[group.listKey] || []).forEach((url, index) => {
+							const extra = { ...client };
+							delete extra[group.listKey];
+							rows.push({
+								id: uid(),
+								groupKey: group.key,
+								clientName: client.clientName || '',
+								cameraName:
+									client.cameraName || client.camName || '',
+								url,
+								extra,
+								sourceIndex: index,
+							});
 						});
 					});
 				});
-			});
-			return rows;
-		}
-
-		function buildConfig() {
-			const next = { ...(state.config || {}) };
-			GROUPS.forEach((group) => {
-				next[group.key] = state.rows
-					.filter((row) => row.groupKey === group.key)
-					.map((row) => {
-						const client = { ...(row.extra || {}) };
-						client.clientName = row.clientName.trim();
-						if (row.cameraName.trim()) client.cameraName = row.cameraName.trim();
-						else delete client.cameraName;
-						delete client.camName;
-						client[group.listKey] = [row.url.trim()];
-						return client;
-					});
-			});
-			return next;
-		}
-
-		function validateRow(row) {
-			const group = getGroup(row.groupKey);
-			const issues = [];
-			let parsedUrl = null;
-			if (!row.clientName.trim()) issues.push('缺 client');
-			if (!row.url.trim()) issues.push('缺 URL');
-			if (row.url.trim() && !row.url.trim().startsWith(group.scheme)) {
-				issues.push(`需為 ${group.scheme}`);
-			}
-			try {
-				parsedUrl = row.url.trim() ? new URL(row.url.trim()) : null;
-			} catch (err) {
-				if (row.url.trim()) issues.push('URL 格式錯誤');
-			}
-			if (parsedUrl && group.scheme === 'rtsp://' && !parsedUrl.port) {
-				issues.push('RTSP 需填 port，例如 :554');
-			}
-			return issues;
-		}
-
-		function duplicateWarnings(row) {
-			const sameUrl = state.rows.filter((item) => item.id !== row.id && row.url.trim() && item.url.trim() === row.url.trim());
-			const sameName = state.rows.filter((item) => item.id !== row.id && row.cameraName.trim() && item.cameraName.trim() === row.cameraName.trim());
-			const warnings = [];
-			if (sameUrl.length) warnings.push('URL 重複');
-			if (sameName.length) warnings.push('名稱重複');
-			return warnings;
-		}
-
-		function allIssues() {
-			return state.rows.flatMap((row) => validateRow(row).map((issue) => `${rowName(row)}: ${issue}`));
-		}
-
-		function setNotice(message, isError = false) {
-			state.notice = message;
-			state.error = isError ? message : '';
-			render();
-		}
-
-		async function loadConfig() {
-			const response = await fetch(`/config/config.json?v=${Date.now()}`);
-			if (!response.ok) throw new Error('讀取 config.json 失敗');
-			state.config = await response.json();
-			state.rows = flattenConfig(state.config);
-			state.jsonText = JSON.stringify(state.config, null, 4);
-			state.notice = '已載入';
-			state.error = '';
-			state.dirty = false;
-		}
-
-		async function postJson(path, body) {
-			const response = await fetch(`${API_BASE}${path}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
-			});
-			const text = await response.text();
-			if (!response.ok) throw new Error(text || '請求失敗');
-			return text;
-		}
-
-		function filteredRows() {
-			const keyword = state.search.trim().toLowerCase();
-			return state.rows.filter((row) => {
-				if (row.groupKey !== state.active) return false;
-				if (!keyword) return true;
-				return [row.cameraName, row.clientName, row.url, urlHost(row.url)]
-					.join(' ')
-					.toLowerCase()
-					.includes(keyword);
-			});
-		}
-
-		function selectRow(id) {
-			const row = state.rows.find((item) => item.id === id);
-			if (!row) return;
-			state.selectedId = id;
-			state.draft = { ...row, extra: { ...(row.extra || {}) }, isNew: false };
-			state.advanced = false;
-			render();
-		}
-
-		function updateField(id, field, value) {
-			if (!state.draft || state.draft.id !== id) return;
-			state.draft[field] = value;
-		}
-
-		function addRow() {
-			const group = getGroup(state.active);
-			state.draft = {
-				id: uid(),
-				groupKey: group.key,
-				clientName: '',
-				cameraName: '',
-				url: group.scheme,
-				extra: {},
-				isNew: true,
-			};
-			state.selectedId = state.draft.id;
-			state.advanced = false;
-			render();
-		}
-
-		function cloneRow(id) {
-			const row = state.rows.find((item) => item.id === id);
-			if (!row) return;
-			state.draft = {
-				...row,
-				id: uid(),
-				cameraName: row.cameraName ? `${row.cameraName} copy` : '',
-				extra: { ...(row.extra || {}) },
-				isNew: true,
-			};
-			state.selectedId = state.draft.id;
-			state.advanced = false;
-			render();
-		}
-
-		function deleteRow(id) {
-			if (!confirm('刪除此 CAM？')) return;
-			state.rows = state.rows.filter((row) => row.id !== id);
-			if (state.selectedId === id) state.selectedId = '';
-			if (state.draft && state.draft.id === id) state.draft = null;
-			state.dirty = true;
-			state.jsonText = JSON.stringify(buildConfig(), null, 4);
-			render();
-		}
-
-		function switchTab(key) {
-			state.active = key;
-			state.selectedId = '';
-			state.draft = null;
-			state.advanced = key === 'json';
-			render();
-		}
-
-		function saveDraft() {
-			if (!state.draft) return;
-			const issues = validateRow(state.draft);
-			if (issues.length) {
-				setNotice(`請先修正：${issues[0]}`, true);
-				return;
+				return rows;
 			}
 
-			const row = { ...state.draft, extra: { ...(state.draft.extra || {}) } };
-			delete row.isNew;
-			const index = state.rows.findIndex((item) => item.id === row.id);
-			if (index === -1) state.rows.unshift(row);
-			else state.rows[index] = row;
+			function buildConfig() {
+				const next = { ...(state.config || {}) };
+				GROUPS.forEach((group) => {
+					next[group.key] = state.rows
+						.filter((row) => row.groupKey === group.key)
+						.map((row) => {
+							const client = { ...(row.extra || {}) };
+							client.clientName = row.clientName.trim();
+							if (row.cameraName.trim())
+								client.cameraName = row.cameraName.trim();
+							else delete client.cameraName;
+							delete client.camName;
+							client[group.listKey] = [row.url.trim()];
+							return client;
+						});
+				});
+				return next;
+			}
 
-			state.dirty = true;
-			state.jsonText = JSON.stringify(buildConfig(), null, 4);
-			state.selectedId = '';
-			state.draft = null;
-			state.notice = 'CAM 已套用，記得儲存設定';
-			state.error = '';
-			render();
-		}
-
-		function closeEditor() {
-			state.selectedId = '';
-			state.draft = null;
-			render();
-		}
-
-		function renderSearchResults() {
-			const list = document.getElementById('cardList');
-			if (list) list.innerHTML = renderCards();
-		}
-
-		function queueSearch() {
-			clearTimeout(state.searchTimer);
-			state.searchTimer = setTimeout(() => {
-				const searchBox = document.getElementById('searchBox');
-				if (!searchBox) return;
-				state.search = searchBox.value;
-				renderSearchResults();
-			}, 60);
-		}
-
-		function updateSearch(value, event) {
-			state.search = value;
-			if (state.composingSearch || (event && event.isComposing)) return;
-			queueSearch();
-		}
-
-		function finishSearch(input) {
-			state.composingSearch = false;
-			queueSearch();
-		}
-
-		async function saveConfig() {
-			let data;
-			try {
-				if (state.advanced) {
-					data = JSON.stringify(JSON.parse(state.jsonText), null, 4);
-				} else {
-					if (state.draft) {
-						setNotice('請先按「儲存 CAM」或取消編輯', true);
-						return;
-					}
-					const issues = allIssues();
-					if (issues.length) {
-						setNotice(`請先修正：${issues[0]}`, true);
-						return;
-					}
-					data = JSON.stringify(buildConfig(), null, 4);
+			function validateRow(row) {
+				const group = getGroup(row.groupKey);
+				const issues = [];
+				let parsedUrl = null;
+				if (!row.clientName.trim()) issues.push('缺 client');
+				if (!row.url.trim()) issues.push('缺 URL');
+				if (
+					row.url.trim() &&
+					!row.url.trim().startsWith(group.scheme)
+				) {
+					issues.push(`需為 ${group.scheme}`);
 				}
-			} catch (err) {
-				setNotice('JSON 格式錯誤', true);
-				return;
+				try {
+					parsedUrl = row.url.trim() ? new URL(row.url.trim()) : null;
+				} catch (err) {
+					if (row.url.trim()) issues.push('URL 格式錯誤');
+				}
+				if (
+					parsedUrl &&
+					group.scheme === 'rtsp://' &&
+					!parsedUrl.port
+				) {
+					issues.push('RTSP 需填 port，例如 :554');
+				}
+				return issues;
 			}
 
-			setNotice('儲存中，系統會自動重啟');
-			try {
-				const result = await postJson('/updateConfig', { data });
-				if (result !== 'success') throw new Error(result || '更新失敗');
-				state.config = JSON.parse(data);
+			function duplicateWarnings(row) {
+				const sameUrl = state.rows.filter(
+					(item) =>
+						item.id !== row.id &&
+						row.url.trim() &&
+						item.url.trim() === row.url.trim(),
+				);
+				const sameName = state.rows.filter(
+					(item) =>
+						item.id !== row.id &&
+						row.cameraName.trim() &&
+						item.cameraName.trim() === row.cameraName.trim(),
+				);
+				const warnings = [];
+				if (sameUrl.length) warnings.push('URL 重複');
+				if (sameName.length) warnings.push('名稱重複');
+				return warnings;
+			}
+
+			function allIssues() {
+				return state.rows.flatMap((row) =>
+					validateRow(row).map(
+						(issue) => `${rowName(row)}: ${issue}`,
+					),
+				);
+			}
+
+			function setNotice(message, isError = false) {
+				state.notice = message;
+				state.error = isError ? message : '';
+				render();
+			}
+
+			async function loadConfig() {
+				const response = await fetch(`./config.json?v=${Date.now()}`);
+				if (!response.ok) throw new Error('讀取 config.json 失敗');
+				state.config = await response.json();
 				state.rows = flattenConfig(state.config);
 				state.jsonText = JSON.stringify(state.config, null, 4);
+				state.notice = '已載入';
+				state.error = '';
 				state.dirty = false;
+			}
+
+			async function postJson(path, body) {
+				const response = await fetch(`${API_BASE}${path}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body),
+				});
+				const text = await response.text();
+				if (!response.ok) throw new Error(text || '請求失敗');
+				return text;
+			}
+
+			function filteredRows() {
+				const keyword = state.search.trim().toLowerCase();
+				return state.rows.filter((row) => {
+					if (row.groupKey !== state.active) return false;
+					if (!keyword) return true;
+					return [
+						row.cameraName,
+						row.clientName,
+						row.url,
+						urlHost(row.url),
+					]
+						.join(' ')
+						.toLowerCase()
+						.includes(keyword);
+				});
+			}
+
+			function selectRow(id) {
+				const row = state.rows.find((item) => item.id === id);
+				if (!row) return;
+				state.selectedId = id;
+				state.draft = {
+					...row,
+					extra: { ...(row.extra || {}) },
+					isNew: false,
+				};
+				state.advanced = false;
+				render();
+			}
+
+			function updateField(id, field, value) {
+				if (!state.draft || state.draft.id !== id) return;
+				state.draft[field] = value;
+			}
+
+			function addRow() {
+				const group = getGroup(state.active);
+				state.draft = {
+					id: uid(),
+					groupKey: group.key,
+					clientName: '',
+					cameraName: '',
+					url: group.scheme,
+					extra: {},
+					isNew: true,
+				};
+				state.selectedId = state.draft.id;
+				state.advanced = false;
+				render();
+			}
+
+			function cloneRow(id) {
+				const row = state.rows.find((item) => item.id === id);
+				if (!row) return;
+				state.draft = {
+					...row,
+					id: uid(),
+					cameraName: row.cameraName ? `${row.cameraName} copy` : '',
+					extra: { ...(row.extra || {}) },
+					isNew: true,
+				};
+				state.selectedId = state.draft.id;
+				state.advanced = false;
+				render();
+			}
+
+			function deleteRow(id) {
+				if (!confirm('刪除此 CAM？')) return;
+				state.rows = state.rows.filter((row) => row.id !== id);
+				if (state.selectedId === id) state.selectedId = '';
+				if (state.draft && state.draft.id === id) state.draft = null;
+				state.dirty = true;
+				state.jsonText = JSON.stringify(buildConfig(), null, 4);
+				render();
+			}
+
+			function switchTab(key) {
+				state.active = key;
 				state.selectedId = '';
 				state.draft = null;
-				setNotice('已儲存，系統重啟中，約 10 秒後生效');
-			} catch (err) {
-				setNotice(err.message || '更新失敗', true);
+				state.advanced = key === 'json';
+				render();
 			}
-		}
 
-		async function forceReloadSystem() {
-			setNotice('重啟中');
-			try {
-				const response = await fetch(`${API_BASE}/forceReloadSystem`);
-				const text = await response.text();
-				if (text !== 'success') throw new Error(text || '重啟失敗');
-				setNotice('系統已重啟，約 10 秒後生效');
-			} catch (err) {
-				setNotice(err.message || '重啟失敗', true);
+			function saveDraft() {
+				if (!state.draft) return;
+				const issues = validateRow(state.draft);
+				if (issues.length) {
+					setNotice(`請先修正：${issues[0]}`, true);
+					return;
+				}
+
+				const row = {
+					...state.draft,
+					extra: { ...(state.draft.extra || {}) },
+				};
+				delete row.isNew;
+				const index = state.rows.findIndex(
+					(item) => item.id === row.id,
+				);
+				if (index === -1) state.rows.unshift(row);
+				else state.rows[index] = row;
+
+				state.dirty = true;
+				state.jsonText = JSON.stringify(buildConfig(), null, 4);
+				state.selectedId = '';
+				state.draft = null;
+				state.notice = 'CAM 已套用，記得儲存設定';
+				state.error = '';
+				render();
 			}
-		}
 
-		function openCctv() {
-			window.location.href = '../cctv/';
-		}
+			function closeEditor() {
+				state.selectedId = '';
+				state.draft = null;
+				render();
+			}
 
-		function renderSummary() {
-			const invalid = state.rows.filter((row) => validateRow(row).length).length;
-			return `
+			function renderSearchResults() {
+				const list = document.getElementById('cardList');
+				if (list) list.innerHTML = renderCards();
+			}
+
+			function queueSearch() {
+				clearTimeout(state.searchTimer);
+				state.searchTimer = setTimeout(() => {
+					const searchBox = document.getElementById('searchBox');
+					if (!searchBox) return;
+					state.search = searchBox.value;
+					renderSearchResults();
+				}, 60);
+			}
+
+			function updateSearch(value, event) {
+				state.search = value;
+				if (state.composingSearch || (event && event.isComposing))
+					return;
+				queueSearch();
+			}
+
+			function finishSearch(input) {
+				state.composingSearch = false;
+				queueSearch();
+			}
+
+			async function saveConfig() {
+				let data;
+				try {
+					if (state.advanced) {
+						data = JSON.stringify(
+							JSON.parse(state.jsonText),
+							null,
+							4,
+						);
+					} else {
+						if (state.draft) {
+							setNotice('請先按「儲存 CAM」或取消編輯', true);
+							return;
+						}
+						const issues = allIssues();
+						if (issues.length) {
+							setNotice(`請先修正：${issues[0]}`, true);
+							return;
+						}
+						data = JSON.stringify(buildConfig(), null, 4);
+					}
+				} catch (err) {
+					setNotice('JSON 格式錯誤', true);
+					return;
+				}
+
+				setNotice('儲存中，系統會自動重啟');
+				try {
+					const result = await postJson('/updateConfig', { data });
+					if (result !== 'success')
+						throw new Error(result || '更新失敗');
+					state.config = JSON.parse(data);
+					state.rows = flattenConfig(state.config);
+					state.jsonText = JSON.stringify(state.config, null, 4);
+					state.dirty = false;
+					state.selectedId = '';
+					state.draft = null;
+					setNotice('已儲存，系統重啟中，約 10 秒後生效');
+				} catch (err) {
+					setNotice(err.message || '更新失敗', true);
+				}
+			}
+
+			async function forceReloadSystem() {
+				setNotice('重啟中');
+				try {
+					const response = await fetch(
+						`${API_BASE}/forceReloadSystem`,
+					);
+					const text = await response.text();
+					if (text !== 'success') throw new Error(text || '重啟失敗');
+					setNotice('系統已重啟，約 10 秒後生效');
+				} catch (err) {
+					setNotice(err.message || '重啟失敗', true);
+				}
+			}
+
+			function openCctv() {
+				window.location.href = '../cctv/';
+			}
+
+			function renderSummary() {
+				const invalid = state.rows.filter(
+					(row) => validateRow(row).length,
+				).length;
+				return `
 				<div class="summary">
-					${GROUPS.map((group) => `
+					${GROUPS.map(
+						(group) => `
 						<div class="metric">
 							<strong>${state.rows.filter((row) => row.groupKey === group.key).length}</strong>
 							<span>${group.label}</span>
 						</div>
-					`).join('')}
+					`,
+					).join('')}
 				</div>
 				<div class="notice ${state.error ? 'error' : ''}">
 					${escapeHtml(state.notice)}${state.dirty ? ' · 尚未儲存' : ''}${invalid ? ` · ${invalid} 筆需修正` : ''}
 				</div>
 			`;
-		}
+			}
 
-		function renderCards() {
-			const rows = filteredRows();
-			if (!rows.length) return '<div class="empty">沒有符合條件的 CAM</div>';
-			return `<div class="grid">${rows.map((row) => {
-				const issues = validateRow(row);
-				const warnings = duplicateWarnings(row);
-				return `
+			function renderCards() {
+				const rows = filteredRows();
+				if (!rows.length)
+					return '<div class="empty">沒有符合條件的 CAM</div>';
+				return `<div class="grid">${rows
+					.map((row) => {
+						const issues = validateRow(row);
+						const warnings = duplicateWarnings(row);
+						return `
 					<div class="card ${issues.length ? 'invalid' : ''}">
 						<div class="card-head">
 							<div>
@@ -679,14 +759,15 @@
 						</div>
 					</div>
 				`;
-			}).join('')}</div>`;
-		}
+					})
+					.join('')}</div>`;
+			}
 
-		function renderEditor() {
-			const row = state.draft;
-			if (!row || state.advanced) return '';
-			const issues = validateRow(row).concat(duplicateWarnings(row));
-			return `
+			function renderEditor() {
+				const row = state.draft;
+				if (!row || state.advanced) return '';
+				const issues = validateRow(row).concat(duplicateWarnings(row));
+				return `
 				<div class="editor">
 					<h2>${row.isNew ? '新增 CAM' : '編輯 CAM'}</h2>
 					<div class="form-grid">
@@ -723,21 +804,23 @@
 					</div>
 				</div>
 			`;
-		}
+			}
 
-		function renderAdvanced() {
-			if (!state.advanced) return '';
-			return `
+			function renderAdvanced() {
+				if (!state.advanced) return '';
+				return `
 				<div class="advanced">
 					<textarea oninput="state.jsonText = this.value; state.dirty = true">${escapeHtml(state.jsonText)}</textarea>
 					<div class="help">進階模式會直接儲存整份 config.json。</div>
 				</div>
 			`;
-		}
+			}
 
-		function render() {
-			const activeId = document.activeElement ? document.activeElement.id : '';
-			document.getElementById('app').innerHTML = `
+			function render() {
+				const activeId = document.activeElement
+					? document.activeElement.id
+					: '';
+				document.getElementById('app').innerHTML = `
 				<div class="shell">
 					<div class="topbar">
 						<div>
@@ -755,53 +838,60 @@
 						${GROUPS.map((group) => `<button class="tab ${state.active === group.key && !state.advanced ? 'active' : ''}" onclick="switchTab('${group.key}')">${group.label}</button>`).join('')}
 						<button class="tab ${state.advanced ? 'active' : ''}" onclick="switchTab('json')">進階 JSON</button>
 					</div>
-					${state.advanced ? '' : `
+					${
+						state.advanced
+							? ''
+							: `
 						<div class="toolbar">
 							<input id="searchBox" value="${escapeHtml(state.search)}" oncompositionstart="state.composingSearch = true" oncompositionend="finishSearch(this)" oninput="updateSearch(this.value, event)" onkeyup="updateSearch(this.value, event)" placeholder="搜尋名稱、client、URL、IP">
 							<button class="primary" onclick="addRow()">新增 CAM</button>
 						</div>
 						<div id="cardList">${renderCards()}</div>
 						${renderEditor()}
-					`}
+					`
+					}
 					${renderAdvanced()}
 				</div>
 			`;
-			if (activeId === 'searchBox') {
-				const searchBox = document.getElementById('searchBox');
-				if (searchBox) {
-					searchBox.focus();
-					searchBox.setSelectionRange(searchBox.value.length, searchBox.value.length);
+				if (activeId === 'searchBox') {
+					const searchBox = document.getElementById('searchBox');
+					if (searchBox) {
+						searchBox.focus();
+						searchBox.setSelectionRange(
+							searchBox.value.length,
+							searchBox.value.length,
+						);
+					}
 				}
 			}
-		}
 
-		(async function init() {
-			try {
-				await loadConfig();
-				render();
-			} catch (err) {
-				state.notice = err.message;
-				state.error = err.message;
-				render();
-			}
-		})();
+			(async function init() {
+				try {
+					await loadConfig();
+					render();
+				} catch (err) {
+					state.notice = err.message;
+					state.error = err.message;
+					render();
+				}
+			})();
 
-		window.state = state;
-		window.render = render;
-		window.selectRow = selectRow;
-		window.updateField = updateField;
-		window.addRow = addRow;
-		window.cloneRow = cloneRow;
-		window.deleteRow = deleteRow;
-		window.switchTab = switchTab;
-		window.saveDraft = saveDraft;
-		window.closeEditor = closeEditor;
-		window.updateSearch = updateSearch;
-		window.queueSearch = queueSearch;
-		window.finishSearch = finishSearch;
-		window.saveConfig = saveConfig;
-		window.forceReloadSystem = forceReloadSystem;
-		window.openCctv = openCctv;
-	</script>
-</body>
+			window.state = state;
+			window.render = render;
+			window.selectRow = selectRow;
+			window.updateField = updateField;
+			window.addRow = addRow;
+			window.cloneRow = cloneRow;
+			window.deleteRow = deleteRow;
+			window.switchTab = switchTab;
+			window.saveDraft = saveDraft;
+			window.closeEditor = closeEditor;
+			window.updateSearch = updateSearch;
+			window.queueSearch = queueSearch;
+			window.finishSearch = finishSearch;
+			window.saveConfig = saveConfig;
+			window.forceReloadSystem = forceReloadSystem;
+			window.openCctv = openCctv;
+		</script>
+	</body>
 </html>

@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-TW">
 	<head>
 		<meta charset="UTF-8" />
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>CCTV</title>
-		<script src="/cctv/lib/jessibuca-pro.js"></script>
+		<script src="./lib/jessibuca-pro.js"></script>
 		<style>
 			* {
 				box-sizing: border-box;
@@ -15,7 +15,7 @@
 				margin: 0;
 				background: #111417;
 				color: #eef2f3;
-				font-family: Arial, "Noto Sans TC", sans-serif;
+				font-family: Arial, 'Noto Sans TC', sans-serif;
 			}
 
 			button,
@@ -342,13 +342,14 @@
 				}).then(async (response) => {
 					const data = await response.json().catch(() => ({}));
 					data.__status = response.status;
-					if (!response.ok) throw new Error(data.error || response.statusText);
+					if (!response.ok)
+						throw new Error(data.error || response.statusText);
 					return data;
 				});
 			}
 
 			function assetUrl(path) {
-				return path ? `/${path}` : '';
+				return path ? `../${path}` : '';
 			}
 
 			function cacheUrl(path, token) {
@@ -363,7 +364,7 @@
 					location.protocol === 'https:'
 						? location.host
 						: `${location.hostname || 'localhost'}:9080`;
-				return `${scheme}://${host}/${cam.livePath}`;
+				return `${scheme}://${host}/mediaserver/${cam.livePath}`;
 			}
 
 			function formatTime(seconds) {
@@ -374,13 +375,17 @@
 			}
 
 			function escapeHtml(value) {
-				return String(value).replace(/[&<>"']/g, (char) => ({
-					'&': '&amp;',
-					'<': '&lt;',
-					'>': '&gt;',
-					'"': '&quot;',
-					"'": '&#39;',
-				})[char]);
+				return String(value).replace(
+					/[&<>"']/g,
+					(char) =>
+						({
+							'&': '&amp;',
+							'<': '&lt;',
+							'>': '&gt;',
+							'"': '&quot;',
+							"'": '&#39;',
+						})[char],
+				);
 			}
 
 			function sleep(ms) {
@@ -400,12 +405,16 @@
 			}
 
 			function mergeCamera(updated) {
-				const index = state.cameras.findIndex((cam) => cam.id === updated.id);
+				const index = state.cameras.findIndex(
+					(cam) => cam.id === updated.id,
+				);
 				if (index !== -1) {
-					const coverStatus =
-						Object.prototype.hasOwnProperty.call(updated, 'coverStatus')
-							? updated.coverStatus
-							: state.cameras[index].coverStatus;
+					const coverStatus = Object.prototype.hasOwnProperty.call(
+						updated,
+						'coverStatus',
+					)
+						? updated.coverStatus
+						: state.cameras[index].coverStatus;
 					state.cameras[index] = {
 						...state.cameras[index],
 						...updated,
@@ -421,7 +430,9 @@
 				state.cameras = await api('/cameras');
 				if (state.selected) {
 					state.selected =
-						state.cameras.find((cam) => cam.id === state.selected.id) || state.selected;
+						state.cameras.find(
+							(cam) => cam.id === state.selected.id,
+						) || state.selected;
 				}
 			}
 
@@ -455,7 +466,9 @@
 									: cam.coverStatus === 'failed'
 										? `<span class="badge warn">更新失敗</span>`
 										: '';
-						const replayBadge = cam.replay ? `<span class="badge ok">有回放</span>` : '';
+						const replayBadge = cam.replay
+							? `<span class="badge ok">有回放</span>`
+							: '';
 						return `
 							<div class="camera-card" onclick="openCamera('${cam.id}')">
 								<div class="cover">
@@ -552,8 +565,14 @@
 				if (replay) {
 					destroyPlayer();
 				} else {
-					if (currentPlayer && currentPlayerNode && currentPlayerUrl === liveUrl(cam)) {
-						document.getElementById('player').replaceWith(currentPlayerNode);
+					if (
+						currentPlayer &&
+						currentPlayerNode &&
+						currentPlayerUrl === liveUrl(cam)
+					) {
+						document
+							.getElementById('player')
+							.replaceWith(currentPlayerNode);
 						state.player = currentPlayer;
 						state.playerUrl = currentPlayerUrl;
 					}
@@ -707,7 +726,9 @@
 				state.view = 'player';
 				state.mode = 'recording';
 				state.recording = {
-					startedMs: result.startedAt ? new Date(result.startedAt).getTime() : Date.now(),
+					startedMs: result.startedAt
+						? new Date(result.startedAt).getTime()
+						: Date.now(),
 					durationSec: result.durationSec || 600,
 				};
 				state.lastRecordPoll = 0;
@@ -718,25 +739,35 @@
 			function hasNewReplay() {
 				return Boolean(
 					state.selected &&
-						state.selected.replay &&
-						state.recording &&
-						new Date(state.selected.replay.updatedAt).getTime() >= state.recording.startedMs
+					state.selected.replay &&
+					state.recording &&
+					new Date(state.selected.replay.updatedAt).getTime() >=
+						state.recording.startedMs,
 				);
 			}
 
 			async function startRecording() {
 				const input = document.getElementById('durationMinutes');
-				const durationSec = Math.max(60, Math.round(Number(input.value || 10) * 60));
+				const durationSec = Math.max(
+					60,
+					Math.round(Number(input.value || 10) * 60),
+				);
 
-				if (state.selected.replay && !confirm('此 CAM 已有回放，新錄製完成後會覆蓋舊回放。')) {
+				if (
+					state.selected.replay &&
+					!confirm('此 CAM 已有回放，新錄製完成後會覆蓋舊回放。')
+				) {
 					return;
 				}
 
 				try {
-					const result = await api(`/cameras/${state.selected.id}/recordings`, {
-						method: 'POST',
-						body: JSON.stringify({ durationSec }),
-					});
+					const result = await api(
+						`/cameras/${state.selected.id}/recordings`,
+						{
+							method: 'POST',
+							body: JSON.stringify({ durationSec }),
+						},
+					);
 					state.notice = '';
 					enterRecording(result);
 				} catch (err) {
@@ -758,7 +789,8 @@
 				state.timer = setInterval(() => {
 					if (!state.recording) return;
 					updateProgress();
-					const elapsed = (Date.now() - state.recording.startedMs) / 1000;
+					const elapsed =
+						(Date.now() - state.recording.startedMs) / 1000;
 					if (Date.now() - state.lastRecordPoll > 3000) {
 						state.lastRecordPoll = Date.now();
 						checkRecording();
@@ -790,15 +822,20 @@
 				if (!state.recording) return;
 				const elapsed = Math.min(
 					state.recording.durationSec,
-					(Date.now() - state.recording.startedMs) / 1000
+					(Date.now() - state.recording.startedMs) / 1000,
 				);
-				const remaining = Math.max(0, state.recording.durationSec - elapsed);
+				const remaining = Math.max(
+					0,
+					state.recording.durationSec - elapsed,
+				);
 				const percent = (elapsed / state.recording.durationSec) * 100;
 				const elapsedNode = document.getElementById('elapsed');
 				const remainingNode = document.getElementById('remaining');
 				const bar = document.getElementById('progressBar');
-				if (elapsedNode) elapsedNode.textContent = `${formatTime(elapsed)} / ${formatTime(state.recording.durationSec)}`;
-				if (remainingNode) remainingNode.textContent = `剩餘 ${formatTime(remaining)}`;
+				if (elapsedNode)
+					elapsedNode.textContent = `${formatTime(elapsed)} / ${formatTime(state.recording.durationSec)}`;
+				if (remainingNode)
+					remainingNode.textContent = `剩餘 ${formatTime(remaining)}`;
 				if (bar) bar.style.width = `${percent}%`;
 			}
 
@@ -807,7 +844,9 @@
 				state.notice = '正在保存回放';
 				render();
 				try {
-					await api(`/cameras/${state.selected.id}/recordings/stop`, { method: 'POST' });
+					await api(`/cameras/${state.selected.id}/recordings/stop`, {
+						method: 'POST',
+					});
 				} catch (err) {
 					state.notice = err.message;
 					render();
@@ -832,9 +871,13 @@
 			}
 
 			async function deleteReplay() {
-				if (!state.selected.replay || !confirm('刪除此 CAM 的回放？')) return;
+				if (!state.selected.replay || !confirm('刪除此 CAM 的回放？'))
+					return;
 				try {
-					const updated = await api(`/cameras/${state.selected.id}/replay`, { method: 'DELETE' });
+					const updated = await api(
+						`/cameras/${state.selected.id}/replay`,
+						{ method: 'DELETE' },
+					);
 					mergeCamera(updated);
 					state.notice = '回放已刪除';
 					state.mode = 'live';
@@ -853,7 +896,8 @@
 
 			function scheduleSnapshotRetry() {
 				stopSnapshotRetry();
-				if (state.view !== 'menu' || state.snapshotFailedIds.size === 0) return;
+				if (state.view !== 'menu' || state.snapshotFailedIds.size === 0)
+					return;
 				state.snapshotRetryTimer = setTimeout(() => {
 					refreshSnapshots([...state.snapshotFailedIds]);
 				}, SNAPSHOT_RETRY_MS);
@@ -868,7 +912,11 @@
 				if (state.snapshotRefreshRunning) return;
 				stopSnapshotRetry();
 				const requested = ids
-					? ids.map((id) => state.cameras.find((cam) => cam.id === id)).filter(Boolean)
+					? ids
+							.map((id) =>
+								state.cameras.find((cam) => cam.id === id),
+							)
+							.filter(Boolean)
 					: [...state.cameras];
 				const queue = [...requested];
 				if (queue.length === 0) {
@@ -882,14 +930,23 @@
 						cam.coverStatus = 'loading';
 						if (state.view === 'menu') render();
 						try {
-							const updated = await api(`/cameras/${cam.id}/snapshot`, { method: 'POST' });
+							const updated = await api(
+								`/cameras/${cam.id}/snapshot`,
+								{ method: 'POST' },
+							);
 							if (updated.__status === 202) {
 								queue.push(cam);
 								await sleep(1200);
 							} else {
-								const { __status, snapshotUpdated, ...camera } = updated;
+								const { __status, snapshotUpdated, ...camera } =
+									updated;
 								if (snapshotUpdated === false) {
-									mergeCamera({ ...camera, coverStatus: camera.cover ? 'failed' : 'offline' });
+									mergeCamera({
+										...camera,
+										coverStatus: camera.cover
+											? 'failed'
+											: 'offline',
+									});
 									state.snapshotFailedIds.add(cam.id);
 								} else {
 									mergeCamera({ ...camera, coverStatus: '' });
@@ -903,7 +960,10 @@
 					}
 				};
 
-				const workers = Array.from({ length: Math.min(SNAPSHOT_WORKERS, queue.length) }, () => worker());
+				const workers = Array.from(
+					{ length: Math.min(SNAPSHOT_WORKERS, queue.length) },
+					() => worker(),
+				);
 				try {
 					await Promise.all(workers);
 				} finally {
