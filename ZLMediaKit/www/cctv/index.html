@@ -127,6 +127,11 @@
 				width: 100%;
 				height: 100%;
 				object-fit: cover;
+				visibility: hidden;
+			}
+
+			.cover img.ready {
+				visibility: visible;
 			}
 
 			.placeholder {
@@ -325,6 +330,7 @@
 					? `${location.origin}/api/cctv`
 					: `http://${location.hostname || 'localhost'}:3000/cctv`;
 				const SNAPSHOT_RETRY_MS = 60000;
+				const SNAPSHOT_CONCURRENCY = 3;
 
 			const state = {
 				view: 'menu',
@@ -375,7 +381,9 @@
 					}, 15000);
 					image.onload = () => {
 						clearTimeout(timeout);
-						resolve();
+						image.className = 'ready';
+						image.alt = camera.name;
+						resolve(image);
 					};
 					image.onerror = () => {
 						clearTimeout(timeout);
@@ -481,31 +489,50 @@
 				`;
 			}
 
+			function renderCameraBadges(cam) {
+				const coverBadge =
+					cam.coverStatus === 'loading'
+						? `<span class="badge">更新中</span>`
+						: cam.coverStatus === 'offline'
+							? `<span class="badge warn">離線</span>`
+							: cam.coverStatus === 'failed'
+								? `<span class="badge warn">更新失敗</span>`
+								: '';
+				const replayBadge = cam.replay
+					? `<span class="badge ok">有回放</span>`
+					: '';
+				return `${replayBadge}${coverBadge}`;
+			}
+
+			function updateCameraStatus(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				const badgeRow = document
+					.getElementById(`camera-${id}`)
+					?.querySelector('.badge-row');
+				if (cam && badgeRow) badgeRow.innerHTML = renderCameraBadges(cam);
+			}
+
+			function replaceCameraCover(id, image) {
+				const cover = document
+					.getElementById(`camera-${id}`)
+					?.querySelector('.cover');
+				const current = cover?.querySelector('img, .placeholder');
+				if (current) current.replaceWith(image);
+			}
+
 			function renderMenu() {
 				destroyPlayer();
 				const cards = state.cameras
 					.map((cam) => {
 						const cover = cam.cover
-							? `<img src="${cacheUrl(cam.cover.path, `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`)}" alt="${escapeHtml(cam.name)}">`
+							? `<img loading="lazy" decoding="async" src="${cacheUrl(cam.cover.path, `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`)}" alt="${escapeHtml(cam.name)}" onload="this.classList.add('ready')">`
 							: `<div class="placeholder">無封面</div>`;
-						const coverBadge =
-							cam.coverStatus === 'loading'
-								? `<span class="badge">更新中</span>`
-								: cam.coverStatus === 'offline'
-									? `<span class="badge warn">離線</span>`
-									: cam.coverStatus === 'failed'
-										? `<span class="badge warn">更新失敗</span>`
-										: '';
-						const replayBadge = cam.replay
-							? `<span class="badge ok">有回放</span>`
-							: '';
 						return `
-							<div class="camera-card" onclick="openCamera('${cam.id}')">
+							<div class="camera-card" id="camera-${cam.id}" onclick="openCamera('${cam.id}')">
 								<div class="cover">
 									${cover}
 									<div class="badge-row">
-										${replayBadge}
-										${coverBadge}
+										${renderCameraBadges(cam)}
 									</div>
 								</div>
 								<div class="card-body">
@@ -951,7 +978,7 @@
 				const refreshSnapshot = async (cam) => {
 					const previousStatus = cam.coverStatus;
 					cam.coverStatus = 'loading';
-					if (state.view === 'menu') render();
+					if (state.view === 'menu') updateCameraStatus(cam.id);
 					while (state.view === 'menu') {
 						try {
 							const updated = await api(
@@ -971,8 +998,9 @@
 									});
 									state.snapshotFailedIds.add(cam.id);
 								} else {
-									await preloadSnapshot(camera);
+									const image = await preloadSnapshot(camera);
 									mergeCamera({ ...camera, coverStatus: '' });
+									replaceCameraCover(cam.id, image);
 									state.snapshotFailedIds.delete(cam.id);
 								}
 							}
@@ -983,14 +1011,24 @@
 							});
 							state.snapshotFailedIds.add(cam.id);
 						}
-						if (state.view === 'menu') render();
+						if (state.view === 'menu') updateCameraStatus(cam.id);
 						return;
 					}
 					cam.coverStatus = previousStatus || '';
 				};
 
+				const queue = [...requested];
+				const worker = async () => {
+					while (state.view === 'menu' && queue.length) {
+						await refreshSnapshot(queue.shift());
+					}
+				};
+				const workers = Array.from(
+					{ length: Math.min(SNAPSHOT_CONCURRENCY, queue.length) },
+					() => worker(),
+				);
 				try {
-					await Promise.all(requested.map(refreshSnapshot));
+					await Promise.all(workers);
 				} finally {
 					state.snapshotRefreshRunning = false;
 					scheduleSnapshotRetry();
@@ -1001,7 +1039,7 @@
 				try {
 					await loadCameras();
 					render();
-					refreshSnapshots();
+					requestAnimationFrame(() => refreshSnapshots());
 				} catch (err) {
 					state.notice = err.message;
 					render();
