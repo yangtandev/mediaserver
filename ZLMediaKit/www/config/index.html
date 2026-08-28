@@ -555,6 +555,12 @@
 				state.selectedId = state.draft.id;
 				state.advanced = false;
 				render();
+				requestAnimationFrame(() => {
+					document.getElementById('cameraEditor')?.scrollIntoView({
+						behavior: 'smooth',
+						block: 'start',
+					});
+				});
 			}
 
 			function cloneRow(id) {
@@ -768,7 +774,7 @@
 				if (!row || state.advanced) return '';
 				const issues = validateRow(row).concat(duplicateWarnings(row));
 				return `
-				<div class="editor">
+				<div class="editor" id="cameraEditor">
 					<h2>${row.isNew ? '新增 CAM' : '編輯 CAM'}</h2>
 					<div class="form-grid">
 						<div class="field">

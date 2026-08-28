@@ -324,8 +324,7 @@
 				location.protocol === 'https:'
 					? `${location.origin}/api/cctv`
 					: `http://${location.hostname || 'localhost'}:3000/cctv`;
-			const SNAPSHOT_RETRY_MS = 60000;
-			const SNAPSHOT_WORKERS = 3;
+				const SNAPSHOT_RETRY_MS = 60000;
 
 			const state = {
 				view: 'menu',
@@ -364,6 +363,29 @@
 				if (!path) return '';
 				const separator = path.includes('?') ? '&' : '?';
 				return `${assetUrl(path)}${separator}v=${encodeURIComponent(token || Date.now())}`;
+			}
+
+			function preloadSnapshot(camera) {
+				const cover = camera.cover;
+				if (!cover) return Promise.reject(new Error('截圖不存在'));
+				const image = new Image();
+				return new Promise((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(new Error('截圖載入逾時'));
+					}, 15000);
+					image.onload = () => {
+						clearTimeout(timeout);
+						resolve();
+					};
+					image.onerror = () => {
+						clearTimeout(timeout);
+						reject(new Error('截圖載入失敗'));
+					};
+					image.src = cacheUrl(
+						cover.path,
+						`${cover.updatedAt || ''}-${cover.size || ''}`,
+					);
+				});
 			}
 
 			function liveUrl(cam) {
@@ -911,11 +933,6 @@
 				}, SNAPSHOT_RETRY_MS);
 			}
 
-			function markSnapshotFailed(cam) {
-				state.snapshotFailedIds.add(cam.id);
-				cam.coverStatus = cam.cover ? 'failed' : 'offline';
-			}
-
 			async function refreshSnapshots(ids = null) {
 				if (state.snapshotRefreshRunning) return;
 				stopSnapshotRetry();
@@ -926,54 +943,54 @@
 							)
 							.filter(Boolean)
 					: [...state.cameras];
-				const queue = [...requested];
-				if (queue.length === 0) {
+				if (requested.length === 0) {
 					scheduleSnapshotRetry();
 					return;
 				}
 				state.snapshotRefreshRunning = true;
-				const worker = async () => {
-					while (state.view === 'menu' && queue.length) {
-						const cam = queue.shift();
-						cam.coverStatus = 'loading';
-						if (state.view === 'menu') render();
+				const refreshSnapshot = async (cam) => {
+					const previousStatus = cam.coverStatus;
+					cam.coverStatus = 'loading';
+					if (state.view === 'menu') render();
+					while (state.view === 'menu') {
 						try {
 							const updated = await api(
 								`/cameras/${cam.id}/snapshot`,
 								{ method: 'POST' },
 							);
 							if (updated.__status === 202) {
-								queue.push(cam);
 								await sleep(1200);
+								continue;
 							} else {
 								const { __status, snapshotUpdated, ...camera } =
 									updated;
 								if (snapshotUpdated === false) {
 									mergeCamera({
 										...camera,
-										coverStatus: camera.cover
-											? 'failed'
-											: 'offline',
+										coverStatus: camera.cover ? 'failed' : 'offline',
 									});
 									state.snapshotFailedIds.add(cam.id);
 								} else {
+									await preloadSnapshot(camera);
 									mergeCamera({ ...camera, coverStatus: '' });
 									state.snapshotFailedIds.delete(cam.id);
 								}
 							}
 						} catch (err) {
-							markSnapshotFailed(cam);
+							mergeCamera({
+								...cam,
+								coverStatus: cam.cover ? 'failed' : 'offline',
+							});
+							state.snapshotFailedIds.add(cam.id);
 						}
 						if (state.view === 'menu') render();
+						return;
 					}
+					cam.coverStatus = previousStatus || '';
 				};
 
-				const workers = Array.from(
-					{ length: Math.min(SNAPSHOT_WORKERS, queue.length) },
-					() => worker(),
-				);
 				try {
-					await Promise.all(workers);
+					await Promise.all(requested.map(refreshSnapshot));
 				} finally {
 					state.snapshotRefreshRunning = false;
 					scheduleSnapshotRetry();
