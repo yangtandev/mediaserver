@@ -5,7 +5,15 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>CCTV</title>
-		<script src="./lib/jessibuca-pro.js"></script>
+		<script>
+			window.CCTV_BASE_PATH = location.pathname.replace(
+				/\/cctv(?:\/index\.html)?\/?$/,
+				'',
+			);
+			document.write(
+				`<script src="${window.CCTV_BASE_PATH}/cctv/lib/jessibuca-pro.js"><\/script>`,
+			);
+		</script>
 		<style>
 			* {
 				box-sizing: border-box;
@@ -349,7 +357,7 @@
 			}
 
 			function assetUrl(path) {
-				return path ? `../${path}` : '';
+				return path ? `${window.CCTV_BASE_PATH}/${path}` : '';
 			}
 
 			function cacheUrl(path, token) {
@@ -359,12 +367,12 @@
 			}
 
 			function liveUrl(cam) {
-				const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-				const host =
-					location.protocol === 'https:'
-						? location.host
-						: `${location.hostname || 'localhost'}:9080`;
-				return `${scheme}://${host}/mediaserver/${cam.livePath}`;
+				const path = `${window.CCTV_BASE_PATH}/${cam.livePath}`;
+				if (location.protocol === 'https:' || window.CCTV_BASE_PATH) {
+					const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+					return `${scheme}://${location.host}${path}`;
+				}
+				return `ws://${location.hostname || 'localhost'}:9080${path}`;
 			}
 
 			function formatTime(seconds) {
@@ -596,7 +604,7 @@
 				destroyPlayer();
 
 				state.player = new JessibucaPro({
-					decoder: '/cctv/lib/decoder-pro-simd.js',
+					decoder: `${window.CCTV_BASE_PATH}/cctv/lib/decoder-pro-simd.js`,
 					container,
 					videoBuffer: 0.1,
 					videoBufferDelay: 0.2,
@@ -664,7 +672,7 @@
 
 			function openConfig() {
 				stopSnapshotRetry();
-				window.location.href = '../config/';
+				window.location.href = `${window.CCTV_BASE_PATH}/config/`;
 			}
 
 			function startLive() {
