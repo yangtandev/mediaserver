@@ -321,6 +321,8 @@
 				location.protocol === 'https:'
 					? `${location.origin}/api/cctv`
 					: `http://${location.hostname || 'localhost'}:3000/cctv`;
+			const CAMERA_POLL_MS = 10000;
+			const SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
 			const SNAPSHOT_RETRY_MS = 60000;
 			const SNAPSHOT_CONCURRENCY = 3;
 
@@ -333,6 +335,7 @@
 				playerUrl: '',
 				recording: null,
 				timer: null,
+				cameraPollTimer: null,
 				lastRecordPoll: 0,
 				notice: '',
 				snapshotRetryTimer: null,
@@ -360,6 +363,14 @@
 				if (!path) return '';
 				const separator = path.includes('?') ? '&' : '?';
 				return `${assetUrl(path)}${separator}v=${encodeURIComponent(token || Date.now())}`;
+			}
+
+			function coverInfo(cam) {
+				if (!cam.cover?.path) return null;
+				return {
+					path: cam.cover.path,
+					token: `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`,
+				};
 			}
 
 			function preloadSnapshot(camera) {
@@ -445,11 +456,31 @@
 			}
 
 			async function loadCameras() {
-				state.cameras = await api('/cameras');
+				const previous = new Map(
+					state.cameras.map((cam) => [cam.id, cam.coverStatus]),
+				);
+				state.cameras = (await api('/cameras')).map((cam) => ({
+					...cam,
+					coverStatus: previous.get(cam.id) || cam.coverStatus || '',
+				}));
 				if (state.selected) {
 					state.selected =
 						state.cameras.find((cam) => cam.id === state.selected.id) || state.selected;
 				}
+			}
+
+			function startCameraPoll() {
+				clearInterval(state.cameraPollTimer);
+				state.cameraPollTimer = setInterval(async () => {
+					if (state.view !== 'menu') return;
+					try {
+						await loadCameras();
+						render();
+					} catch (err) {
+						state.notice = err.message;
+						render();
+					}
+				}, CAMERA_POLL_MS);
 			}
 
 			function renderTopbar(title) {
@@ -492,19 +523,43 @@
 				if (current) current.replaceWith(image);
 			}
 
+			function markCoverReady(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam) return;
+				if (cam.coverStatus !== 'loading') return;
+				cam.coverStatus = '';
+				updateCameraStatus(id);
+			}
+
+			function markCoverFailed(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam) return;
+				cam.coverStatus = 'failed';
+				updateCameraStatus(id);
+			}
+
+			function placeholderText(cam) {
+				if (cam.coverStatus === 'loading') return '更新中';
+				if (cam.coverStatus === 'failed') return '更新失敗';
+				if (cam.coverStatus === 'offline') return '離線';
+				return '無封面';
+			}
+
 			function renderMenu() {
 				destroyPlayer();
 				const cards = state.cameras
 					.map((cam) => {
-						const cover = cam.cover
-							? `<img loading="lazy" decoding="async" src="${cacheUrl(cam.cover.path, `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`)}" alt="${escapeHtml(cam.name)}" onload="this.classList.add('ready')">`
-							: `<div class="placeholder">無封面</div>`;
+						const info = coverInfo(cam);
+						const badgeCam = cam;
+						const cover = info
+							? `<img loading="lazy" decoding="async" src="${cacheUrl(info.path, info.token)}" alt="${escapeHtml(cam.name)}" onload="this.classList.add('ready'); markCoverReady('${cam.id}')" onerror="markCoverFailed('${cam.id}'); this.outerHTML='<div class=&quot;placeholder&quot;>更新失敗</div>'">`
+							: `<div class="placeholder">${placeholderText(cam)}</div>`;
 						return `
 							<div class="camera-card" id="camera-${cam.id}" onclick="openCamera('${cam.id}')">
 								<div class="cover">
 									${cover}
 									<div class="badge-row">
-										${renderCameraBadges(cam)}
+										${renderCameraBadges(badgeCam)}
 									</div>
 								</div>
 								<div class="card-body">
@@ -895,10 +950,11 @@
 
 			function scheduleSnapshotRetry() {
 				stopSnapshotRetry();
-				if (state.view !== 'menu' || state.snapshotFailedIds.size === 0) return;
+				if (state.view !== 'menu') return;
+				const failedIds = [...state.snapshotFailedIds];
 				state.snapshotRetryTimer = setTimeout(() => {
-					refreshSnapshots([...state.snapshotFailedIds]);
-				}, SNAPSHOT_RETRY_MS);
+					refreshSnapshots(failedIds.length > 0 ? failedIds : null);
+				}, failedIds.length > 0 ? SNAPSHOT_RETRY_MS : SNAPSHOT_REFRESH_MS);
 			}
 
 			async function refreshSnapshots(ids = null) {
@@ -911,6 +967,10 @@
 					scheduleSnapshotRetry();
 					return;
 				}
+				requested.forEach((cam) => {
+					cam.coverStatus = 'loading';
+					if (state.view === 'menu') updateCameraStatus(cam.id);
+				});
 				state.snapshotRefreshRunning = true;
 				const refreshSnapshot = async (cam) => {
 					const previousStatus = cam.coverStatus;
@@ -927,7 +987,7 @@
 								if (snapshotUpdated === false) {
 									mergeCamera({
 										...camera,
-										coverStatus: camera.cover ? 'failed' : 'offline',
+										coverStatus: 'failed',
 									});
 									state.snapshotFailedIds.add(cam.id);
 								} else {
@@ -940,7 +1000,7 @@
 						} catch (err) {
 							mergeCamera({
 								...cam,
-								coverStatus: cam.cover ? 'failed' : 'offline',
+								coverStatus: 'failed',
 							});
 							state.snapshotFailedIds.add(cam.id);
 						}
@@ -972,6 +1032,7 @@
 				try {
 					await loadCameras();
 					render();
+					startCameraPoll();
 					requestAnimationFrame(() => refreshSnapshots());
 				} catch (err) {
 					state.notice = err.message;
@@ -989,6 +1050,8 @@
 			window.startRecording = startRecording;
 			window.stopRecording = stopRecording;
 			window.deleteReplay = deleteReplay;
+			window.markCoverReady = markCoverReady;
+			window.markCoverFailed = markCoverFailed;
 		</script>
 	</body>
 </html>
