@@ -37,6 +37,7 @@ let CCTV_SNAP_COMMANDS = {};
 let CONFIG = {};
 let CONVERT_LIVE_STREAM_TO_MP4 = false;
 const RTSP_TIMEOUT_US = '10000000';
+const CCTV_SNAPSHOT_TIMEOUT_MS = 5000;
 const BASE_RETRY_DELAY_MS = 5000;
 const MAX_RETRY_DELAY_MS = 60000;
 const RTSP_TIMEOUT_INPUT_OPTIONS = getRtspTimeoutInputOptions();
@@ -711,7 +712,7 @@ APP.post('/cctv/cameras/:id/snapshot', (req, res) => {
 		if (FS.existsSync(tmpPath)) FS.rmSync(tmpPath, { force: true });
 		console.warn(`[WARN] CCTV snapshot timeout ${camera.id}`);
 		res.status(504).json(publicCamera(findCctvCamera(camera.id)));
-	}, 15000);
+	}, CCTV_SNAPSHOT_TIMEOUT_MS);
 
 	CCTV_SNAP_COMMANDS[camera.id] = { command };
 	command.save(tmpPath);
