@@ -332,7 +332,6 @@
 			const CAMERA_POLL_MS = 10000;
 			const SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
 			const SNAPSHOT_RETRY_MS = 60000;
-			const SNAPSHOT_CONCURRENCY = 3;
 
 			const state = {
 				view: 'menu',
@@ -346,9 +345,8 @@
 				cameraPollTimer: null,
 				lastRecordPoll: 0,
 				notice: '',
-				snapshotRetryTimer: null,
-				snapshotRefreshRunning: false,
-				snapshotFailedIds: new Set(),
+				snapshotTimers: new Map(),
+				snapshotRunningIds: new Set(),
 			};
 
 			function api(path, options = {}) {
@@ -483,11 +481,20 @@
 					...cam,
 					coverStatus: previous.get(cam.id) || cam.coverStatus || '',
 				}));
+				const currentIds = new Set(state.cameras.map((cam) => cam.id));
+				[...state.snapshotTimers.keys()].forEach((id) => {
+					if (!currentIds.has(id)) stopSnapshotTimer(id);
+				});
 				if (state.selected) {
 					state.selected =
 						state.cameras.find(
 							(cam) => cam.id === state.selected.id,
 						) || state.selected;
+				}
+				if (state.view === 'menu') {
+					state.cameras.forEach((cam) => {
+						if (!previous.has(cam.id)) refreshSnapshot(cam.id);
+					});
 				}
 			}
 
@@ -748,7 +755,7 @@
 			}
 
 			function openCamera(id) {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				state.selected = state.cameras.find((cam) => cam.id === id);
 				state.notice = '';
 				if (!state.selected) return;
@@ -775,12 +782,12 @@
 			}
 
 			function openConfig() {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				window.location.href = `${window.CCTV_BASE_PATH}/config/`;
 			}
 
 			function startLive() {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				clearInterval(state.timer);
 				state.view = 'player';
 				state.mode = 'live';
@@ -795,7 +802,7 @@
 					render();
 					return;
 				}
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				clearInterval(state.timer);
 				state.view = 'player';
 				state.mode = 'replay';
@@ -1001,97 +1008,78 @@
 				}
 			}
 
-			function stopSnapshotRetry() {
-				clearTimeout(state.snapshotRetryTimer);
-				state.snapshotRetryTimer = null;
+			function stopSnapshotTimer(id) {
+				const timer = state.snapshotTimers.get(id);
+				if (timer) clearTimeout(timer);
+				state.snapshotTimers.delete(id);
 			}
 
-			function scheduleSnapshotRetry() {
-				stopSnapshotRetry();
+			function stopSnapshotTimers() {
+				state.snapshotTimers.forEach((timer) => clearTimeout(timer));
+				state.snapshotTimers.clear();
+			}
+
+			function scheduleSnapshot(id, delay) {
+				stopSnapshotTimer(id);
 				if (state.view !== 'menu') return;
-				const failedIds = [...state.snapshotFailedIds];
-				state.snapshotRetryTimer = setTimeout(() => {
-					refreshSnapshots(failedIds.length > 0 ? failedIds : null);
-				}, failedIds.length > 0 ? SNAPSHOT_RETRY_MS : SNAPSHOT_REFRESH_MS);
+				state.snapshotTimers.set(
+					id,
+					setTimeout(() => refreshSnapshot(id), delay),
+				);
 			}
 
-			async function refreshSnapshots(ids = null) {
-				if (state.snapshotRefreshRunning) return;
-				stopSnapshotRetry();
-				const requested = ids
-					? ids
-							.map((id) =>
-								state.cameras.find((cam) => cam.id === id),
-							)
-							.filter(Boolean)
-					: [...state.cameras];
-				if (requested.length === 0) {
-					scheduleSnapshotRetry();
-					return;
-				}
-				requested.forEach((cam) => {
-					cam.coverStatus = 'loading';
-					if (state.view === 'menu') updateCameraStatus(cam.id);
-				});
-				state.snapshotRefreshRunning = true;
-				const refreshSnapshot = async (cam) => {
-					const previousStatus = cam.coverStatus;
-					cam.coverStatus = 'loading';
-					if (state.view === 'menu') updateCameraStatus(cam.id);
+			async function refreshSnapshot(id) {
+				if (state.snapshotRunningIds.has(id)) return;
+				stopSnapshotTimer(id);
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam || state.view !== 'menu') return;
+
+				const previousStatus = cam.coverStatus;
+				cam.coverStatus = 'loading';
+				if (state.view === 'menu') updateCameraStatus(cam.id);
+				state.snapshotRunningIds.add(id);
+
+				try {
 					while (state.view === 'menu') {
-						try {
-							const updated = await api(
-								`/cameras/${cam.id}/snapshot`,
-								{ method: 'POST' },
-							);
-							if (updated.__status === 202) {
-								await sleep(1200);
-								continue;
-							} else {
-								const { __status, snapshotUpdated, ...camera } =
-									updated;
-								if (snapshotUpdated === false) {
-									mergeCamera({
-										...camera,
-										coverStatus: 'failed',
-									});
-									state.snapshotFailedIds.add(cam.id);
-								} else {
-									const image = await preloadSnapshot(camera);
-									mergeCamera({ ...camera, coverStatus: '' });
-									replaceCameraCover(cam.id, image);
-									state.snapshotFailedIds.delete(cam.id);
-								}
-							}
-						} catch (err) {
-							mergeCamera({
-								...cam,
-								coverStatus: 'failed',
-							});
-							state.snapshotFailedIds.add(cam.id);
+						const updated = await api(
+							`/cameras/${cam.id}/snapshot`,
+							{ method: 'POST' },
+						);
+						if (updated.__status === 202) {
+							await sleep(1200);
+							continue;
+						}
+
+						const { __status, snapshotUpdated, ...camera } = updated;
+						if (snapshotUpdated === false) {
+							mergeCamera({ ...camera, coverStatus: 'failed' });
+							scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+						} else {
+							const image = await preloadSnapshot(camera);
+							mergeCamera({ ...camera, coverStatus: '' });
+							replaceCameraCover(cam.id, image);
+							scheduleSnapshot(cam.id, SNAPSHOT_REFRESH_MS);
 						}
 						if (state.view === 'menu') updateCameraStatus(cam.id);
 						return;
 					}
 					cam.coverStatus = previousStatus || '';
-				};
-
-				const queue = [...requested];
-				const worker = async () => {
-					while (state.view === 'menu' && queue.length) {
-						await refreshSnapshot(queue.shift());
-					}
-				};
-				const workers = Array.from(
-					{ length: Math.min(SNAPSHOT_CONCURRENCY, queue.length) },
-					() => worker(),
-				);
-				try {
-					await Promise.all(workers);
+				} catch (err) {
+					mergeCamera({ ...cam, coverStatus: 'failed' });
+					scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+					if (state.view === 'menu') updateCameraStatus(cam.id);
 				} finally {
-					state.snapshotRefreshRunning = false;
-					scheduleSnapshotRetry();
+					state.snapshotRunningIds.delete(id);
 				}
+			}
+
+			function refreshSnapshots(ids = null) {
+				const requested = ids
+					? ids
+							.map((id) => state.cameras.find((cam) => cam.id === id))
+							.filter(Boolean)
+					: [...state.cameras];
+				requested.forEach((cam) => refreshSnapshot(cam.id));
 			}
 
 			(async function init() {
