@@ -332,6 +332,8 @@
 			const CAMERA_POLL_MS = 10000;
 			const SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
 			const SNAPSHOT_RETRY_MS = 60000;
+			const SNAPSHOT_STAGGER_MS = 1500;
+			const SNAPSHOT_ATTEMPT_TIMEOUT_MS = 8000;
 
 			const state = {
 				view: 'menu',
@@ -347,6 +349,8 @@
 				notice: '',
 				snapshotTimers: new Map(),
 				snapshotRunningIds: new Set(),
+				snapshotTokens: new Map(),
+				snapshotTokenSeq: 0,
 				displayedCovers: new Map(),
 			};
 
@@ -361,6 +365,14 @@
 						throw new Error(data.error || response.statusText);
 					return data;
 				});
+			}
+
+			function apiWithTimeout(path, options = {}, timeoutMs = SNAPSHOT_ATTEMPT_TIMEOUT_MS) {
+				const controller = new AbortController();
+				const timer = setTimeout(() => controller.abort(), timeoutMs);
+				return api(path, { ...options, signal: controller.signal }).finally(() =>
+					clearTimeout(timer),
+				);
 			}
 
 			function assetUrl(path) {
@@ -493,9 +505,11 @@
 						) || state.selected;
 				}
 				if (state.view === 'menu') {
-					state.cameras.forEach((cam) => {
-						if (!previous.has(cam.id)) refreshSnapshot(cam.id);
-					});
+					const newIds = state.cameras
+						.filter((cam) => !previous.has(cam.id))
+						.map((cam) => cam.id);
+					markSnapshotsLoading(newIds);
+					refreshSnapshots(newIds);
 				}
 			}
 
@@ -545,10 +559,11 @@
 
 			function updateCameraStatus(id) {
 				const cam = state.cameras.find((item) => item.id === id);
-				const badgeRow = document
-					.getElementById(`camera-${id}`)
-					?.querySelector('.badge-row');
+				const card = document.getElementById(`camera-${id}`);
+				const badgeRow = card?.querySelector('.badge-row');
+				const placeholder = card?.querySelector('.cover > .placeholder');
 				if (cam && badgeRow) badgeRow.innerHTML = renderCameraBadges(cam);
+				if (cam && placeholder) placeholder.textContent = placeholderText(cam);
 			}
 
 			function replaceCameraCover(id, image) {
@@ -575,7 +590,6 @@
 
 			function markCoverLoadFailed(id, element) {
 				if (state.displayedCovers.has(id)) return;
-				markCoverFailed(id);
 				const cam = state.cameras.find((item) => item.id === id);
 				if (cam && element) {
 					element.outerHTML = `<div class="placeholder">${placeholderText(cam)}</div>`;
@@ -786,6 +800,7 @@
 				state.mode = 'live';
 				state.recording = null;
 				state.notice = '';
+				markSnapshotsLoading();
 				render();
 				refreshSnapshots();
 			}
@@ -1026,6 +1041,8 @@
 			function stopSnapshotTimers() {
 				state.snapshotTimers.forEach((timer) => clearTimeout(timer));
 				state.snapshotTimers.clear();
+				state.snapshotTokens.clear();
+				state.snapshotRunningIds.clear();
 			}
 
 			function scheduleSnapshot(id, delay) {
@@ -1037,22 +1054,58 @@
 				);
 			}
 
+			function markSnapshotsLoading(ids = null) {
+				const requested = ids
+					? ids
+							.map((id) => state.cameras.find((cam) => cam.id === id))
+							.filter(Boolean)
+					: [...state.cameras];
+				requested.forEach((cam) => {
+					if (!state.snapshotRunningIds.has(cam.id)) {
+						cam.coverStatus = 'loading';
+						updateCameraStatus(cam.id);
+					}
+				});
+			}
+
+			function isPrivateCamera(cam) {
+				const host = String(cam.ip || '').split(':')[0];
+				return (
+					host === 'localhost' ||
+					host === '127.0.0.1' ||
+					host.startsWith('10.') ||
+					host.startsWith('192.168.') ||
+					/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+				);
+			}
+
 			async function refreshSnapshot(id) {
 				if (state.snapshotRunningIds.has(id)) return;
 				stopSnapshotTimer(id);
 				const cam = state.cameras.find((item) => item.id === id);
 				if (!cam || state.view !== 'menu') return;
 
+				const token = state.snapshotTokenSeq + 1;
+				state.snapshotTokenSeq = token;
+				state.snapshotTokens.set(id, token);
+				const isCurrent = () => state.snapshotTokens.get(id) === token;
+				const visibleCover = state.displayedCovers.get(id) || coverInfo(cam);
 				const previousStatus = cam.coverStatus;
 				cam.coverStatus = 'loading';
 				if (state.view === 'menu') updateCameraStatus(cam.id);
 				state.snapshotRunningIds.add(id);
+				const startedAt = Date.now();
 
 				try {
-					while (state.view === 'menu') {
-						const updated = await api(
+					while (state.view === 'menu' && isCurrent()) {
+						const elapsed = Date.now() - startedAt;
+						if (elapsed >= SNAPSHOT_ATTEMPT_TIMEOUT_MS) {
+							throw new Error('截圖更新逾時');
+						}
+						const updated = await apiWithTimeout(
 							`/cameras/${cam.id}/snapshot`,
 							{ method: 'POST' },
+							SNAPSHOT_ATTEMPT_TIMEOUT_MS - elapsed,
 						);
 						if (updated.__status === 202) {
 							await sleep(1200);
@@ -1060,41 +1113,59 @@
 						}
 
 						const { __status, snapshotUpdated, ...camera } = updated;
+						if (!isCurrent()) return;
 						if (snapshotUpdated === false) {
 							mergeCamera({ ...camera, coverStatus: 'failed' });
 							scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
 						} else {
+							const nextCover = coverInfo(camera);
+							if (visibleCover && nextCover?.token === visibleCover.token) {
+								mergeCamera({ ...camera, coverStatus: 'failed' });
+								scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+								if (state.view === 'menu') updateCameraStatus(cam.id);
+								return;
+							}
 							const image = await preloadSnapshot(camera);
+							if (!isCurrent()) return;
 							mergeCamera({ ...camera, coverStatus: '' });
-							state.displayedCovers.set(cam.id, coverInfo(camera));
+							if (nextCover) state.displayedCovers.set(cam.id, nextCover);
 							replaceCameraCover(cam.id, image);
 							scheduleSnapshot(cam.id, SNAPSHOT_REFRESH_MS);
 						}
 						if (state.view === 'menu') updateCameraStatus(cam.id);
 						return;
 					}
+					if (!isCurrent()) return;
 					cam.coverStatus = previousStatus || '';
 				} catch (err) {
+					if (!isCurrent()) return;
 					mergeCamera({ ...cam, coverStatus: 'failed' });
 					scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
 					if (state.view === 'menu') updateCameraStatus(cam.id);
 				} finally {
-					state.snapshotRunningIds.delete(id);
+					if (isCurrent()) state.snapshotRunningIds.delete(id);
 				}
 			}
 
 			function refreshSnapshots(ids = null) {
 				const requested = ids
-					? ids
+				? ids
 							.map((id) => state.cameras.find((cam) => cam.id === id))
 							.filter(Boolean)
 					: [...state.cameras];
-				requested.forEach((cam) => refreshSnapshot(cam.id));
+				markSnapshotsLoading(requested.map((cam) => cam.id));
+				requested
+					.sort((a, b) => Number(isPrivateCamera(b)) - Number(isPrivateCamera(a)))
+					.forEach((cam, index) => {
+					if (index === 0) refreshSnapshot(cam.id);
+					else scheduleSnapshot(cam.id, index * SNAPSHOT_STAGGER_MS);
+				});
 			}
 
 			(async function init() {
 				try {
 					await loadCameras();
+					markSnapshotsLoading();
 					render();
 					startCameraPoll();
 					requestAnimationFrame(() => refreshSnapshots());
