@@ -103,6 +103,8 @@ function checkSnapshotQuality(imagePath) {
 				imagePath,
 				'-vf',
 				`scale=${width}:${height}:flags=area`,
+				'-frames:v',
+				'1',
 				'-f',
 				'rawvideo',
 				'-pix_fmt',
@@ -112,25 +114,67 @@ function checkSnapshotQuality(imagePath) {
 			{ maxBuffer: pixels * 3 + 1024 }
 		);
 	} catch (err) {
-		return { ok: false, reason: 'decode failed' };
+		if (err.stdout && err.stdout.length >= pixels * 3) {
+			raw = err.stdout;
+		} else {
+			return { ok: false, reason: 'decode failed' };
+		}
 	}
 
 	if (raw.length < pixels * 3) return { ok: false, reason: 'incomplete pixels' };
 
 	const gray = new Float32Array(pixels);
+	const artifactMask = new Uint8Array(pixels);
+	const noisyArtifactRows = new Uint16Array(height);
 	let sum = 0;
 	let sumSq = 0;
 	let chromaSum = 0;
+	let greenPixels = 0;
+	let artifactPixels = 0;
 
 	for (let i = 0, p = 0; i < raw.length; i += 3, p += 1) {
 		const r = raw[i];
 		const g = raw[i + 1];
 		const b = raw[i + 2];
 		const y = (r + g + b) / 3;
+		const maxChannel = Math.max(r, g, b);
+		const minChannel = Math.min(r, g, b);
+		const spread = maxChannel - minChannel;
 		gray[p] = y;
 		sum += y;
 		sumSq += y * y;
 		chromaSum += Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
+		if (g > 90 && g > r * 1.35 && g > b * 1.35) greenPixels += 1;
+		if (maxChannel > 115 && spread > 80) {
+			artifactPixels += 1;
+			artifactMask[p] = 1;
+		}
+	}
+
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const p = y * width + x;
+			if (!artifactMask[p]) continue;
+			const i = p * 3;
+			let noisy = false;
+			if (x > 0) {
+				const left = i - 3;
+				noisy = noisy || Math.max(
+					Math.abs(raw[i] - raw[left]),
+					Math.abs(raw[i + 1] - raw[left + 1]),
+					Math.abs(raw[i + 2] - raw[left + 2])
+				) > 70;
+			}
+			if (y > 0) {
+				const up = i - width * 3;
+				noisy = noisy || Math.max(
+					Math.abs(raw[i] - raw[up]),
+					Math.abs(raw[i + 1] - raw[up + 1]),
+					Math.abs(raw[i + 2] - raw[up + 2])
+				) > 70;
+			}
+			if (noisy) noisyArtifactRows[y] += 1;
+		}
 	}
 
 	let edgeSum = 0;
@@ -175,7 +219,17 @@ function checkSnapshotQuality(imagePath) {
 	const isMiddleBrightness = mean > 15 && mean < 240;
 	const middle = regionStats(Math.floor(height * 0.25), Math.floor(height * 0.75));
 	const bottom = regionStats(Math.floor(height * 0.8), height);
+	const greenRatio = greenPixels / pixels;
+	const artifactRatio = artifactPixels / pixels;
+	const badArtifactRows = Array.from(noisyArtifactRows).filter((count) => count / width > 0.35).length;
+	const artifactRowRatio = badArtifactRows / height;
 
+	if (greenRatio > 0.70) {
+		return { ok: false, reason: `green screen (green ${greenRatio.toFixed(3)})` };
+	}
+	if (artifactRatio > 0.12 && artifactRowRatio > 0.08) {
+		return { ok: false, reason: `decode artifacts (artifact ${artifactRatio.toFixed(3)}, rows ${artifactRowRatio.toFixed(3)})` };
+	}
 	if (isMiddleBrightness && stddev < 7 && edge < 3 && chroma < 12) {
 		return { ok: false, reason: `flat frame (stddev ${stddev.toFixed(1)}, edge ${edge.toFixed(1)})` };
 	}
