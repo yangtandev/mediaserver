@@ -38,5 +38,8 @@ cmake ..
 cmake --build . --parallel "$(nproc)"
 cd ../..
 
+sed -i 's|^rootPath=.*|rootPath=./www|' ZLMediaKit/release/linux/Debug/config.ini
+mkdir -p ZLMediaKit/release/linux/Debug/www/image
+
 # Running apps with PM2
 pm2 start ecosystem.config.js && pm2 save
