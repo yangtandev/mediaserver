@@ -13,7 +13,7 @@ const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const CCTV_DATA_PATH = PATH.join(BACKUP_PATH, 'cctv', 'data');
 const FFMPEG = require('fluent-ffmpeg');
-const FFMPEG_PATH = '/usr/bin/ffmpeg';
+const FFMPEG_PATH = '/usr/local/bin/ffmpeg';
 FFMPEG.setFfmpegPath(FFMPEG_PATH);
 const { execFileSync, execSync } = require('child_process');
 
@@ -95,7 +95,7 @@ function checkSnapshotQuality(imagePath) {
 	let raw;
 	try {
 		raw = execFileSync(
-			'/usr/bin/ffmpeg',
+			FFMPEG_PATH,
 			[
 				'-v',
 				'error',
