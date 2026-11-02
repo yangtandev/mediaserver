@@ -337,9 +337,9 @@ int start_main(int argc,char *argv[]) {
             if (rtmpsPort) { rtmpsSrv->start<RtmpSessionWithSSL>(rtmpsPort); }
 
             //http服务器，端口默认80
-            if (httpPort) { httpSrv->start<HttpSession>(httpPort); }
+            if (httpPort) { httpSrv->start<HttpSession>(httpPort, "127.0.0.1"); }
             //https服务器，端口默认443
-            if (httpsPort) { httpsSrv->start<HttpsSession>(httpsPort); }
+            if (httpsPort) { httpsSrv->start<HttpsSession>(httpsPort, "127.0.0.1"); }
 
             //telnet远程调试服务器
             if (shellPort) { shellSrv->start<ShellSession>(shellPort); }

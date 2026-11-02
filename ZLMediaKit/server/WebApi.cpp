@@ -635,6 +635,12 @@ void installWebApi() {
     api_regist("/index/api/setServerConfig",[](API_ARGS_MAP){
         CHECK_SECRET();
         auto &ini = mINI::Instance();
+        // Command templates must only be changed in the local configuration file.
+        for (auto &pr : allArgs.getArgs()) {
+            if (pr.first.compare(0, 7, "ffmpeg.") == 0) {
+                throw AuthException("FFmpeg configuration cannot be changed through the API");
+            }
+        }
         int changed = API::Success;
         for (auto &pr : allArgs.getArgs()) {
             if (ini.find(pr.first) == ini.end()) {

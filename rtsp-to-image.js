@@ -45,8 +45,8 @@ function getRtspTimeoutInputOptions() {
 		const help = execFileSync(FFMPEG_PATH, ['-hide_banner', '-h', 'demuxer=rtsp'], {
 			encoding: 'utf8',
 		});
-		if (help.includes('-timeout')) return ['-timeout', RTSP_TIMEOUT_US];
 		if (help.includes('-stimeout')) return ['-stimeout', RTSP_TIMEOUT_US];
+		if (help.includes('-timeout')) return ['-timeout', RTSP_TIMEOUT_US];
 	} catch (error) {
 		console.warn('[WARN] Could not detect FFmpeg RTSP timeout option.');
 	}
