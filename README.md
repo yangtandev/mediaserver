@@ -30,14 +30,19 @@ pm2 start $HOME/mediaserver/collect-images.js --time && pm2 save
 
     ```
     location /mediaserver/ {
-        proxy_pass http://localhost:9080/;
+        proxy_pass http://127.0.0.1:9080/;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
     }
+
+    # 管理 API 不對外開放，避免透過本機反向代理繞過驗證。
+    location ~* ^/mediaserver/index(?:/|$) {
+        return 403;
+    }
     
     location /api/ {
-        proxy_pass http://localhost:3000/;
+        proxy_pass http://127.0.0.1:3000/;
     }
 
     location /ws {
@@ -53,6 +58,12 @@ pm2 start $HOME/mediaserver/collect-images.js --time && pm2 save
     ```
     sudo /etc/init.d/nginx restart
     ```
+
+### 安全設定
+
+Node API 與 ZLMediaKit HTTP/HTTPS 僅監聽 `127.0.0.1`，網頁請透過 Nginx 的 HTTPS 網址存取。修改 ZLMediaKit 原始碼後需重新編譯 `MediaServer`，並套用上方 Nginx 管理 API 封鎖設定。
+
+部署時檢查未納入 Git 的 `ZLMediaKit/release/linux/Debug/config.ini`：使用獨立隨機 `api.secret`、設定 `apiDebug=0`，並在 `[ffmpeg]` 設定 `bin=/usr/bin/ffmpeg` 及 `snap=%s -i %s -y -f mjpeg -t 0.001 %s`。FFmpeg 命令設定只能由本機設定檔修改，API 不允許改寫。不要沿用來源不明的 runtime config。
 
 ## 功能介紹
 

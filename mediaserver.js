@@ -13,7 +13,8 @@ const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const CCTV_DATA_PATH = PATH.join(BACKUP_PATH, 'cctv', 'data');
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+const FFMPEG_PATH = '/usr/bin/ffmpeg';
+FFMPEG.setFfmpegPath(FFMPEG_PATH);
 const { execFileSync, execSync } = require('child_process');
 
 function isQsvSupported() {
@@ -35,11 +36,26 @@ let CCTV_RECORD_COMMANDS = {};
 let CCTV_SNAP_COMMANDS = {};
 let CONFIG = {};
 let CONVERT_LIVE_STREAM_TO_MP4 = false;
+const RTSP_TIMEOUT_US = '10000000';
+const RTSP_TIMEOUT_INPUT_OPTIONS = getRtspTimeoutInputOptions();
 const CCTV_CLIENT_GROUPS = [
 	{ key: 'rtmpClientList', type: 'rtmp' },
 	{ key: 'h264RtspClientList', type: 'h264' },
 	{ key: 'hevcRtspClientList', type: 'hevc' },
 ];
+
+function getRtspTimeoutInputOptions() {
+	try {
+		const help = execFileSync(FFMPEG_PATH, ['-hide_banner', '-h', 'demuxer=rtsp'], {
+			encoding: 'utf8',
+		});
+		if (help.includes('-stimeout')) return ['-stimeout', RTSP_TIMEOUT_US];
+		if (help.includes('-timeout')) return ['-timeout', RTSP_TIMEOUT_US];
+	} catch (error) {
+		console.warn('[WARN] Could not detect FFmpeg RTSP timeout option.');
+	}
+	return [];
+}
 
 function safeCamId(value) {
 	return String(value).replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -292,7 +308,7 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 	}
 
 	const command = FFMPEG(rtsp)
-		.addInputOption('-rtsp_transport', 'tcp', '-re', '-threads', 1)
+		.addInputOption('-rtsp_transport', 'tcp', ...RTSP_TIMEOUT_INPUT_OPTIONS, '-re', '-threads', 1)
 		.addOutputOption(
 			'-map',
 			'0:v:0',
@@ -581,7 +597,6 @@ function runProcesses() {
 
 APP.use(CORS());
 APP.use(EXPRESS.json());
-APP.use(EXPRESS.static(__dirname));
 
 APP.get('/cctv/cameras', (req, res) => {
 	try {
@@ -854,7 +869,7 @@ APP.post('/updateConfig', (req, res) => {
 		res.status(400).send('Invalid JSON data: ' + err.message);
 	}
 });
-SERVER.listen(PORT, '0.0.0.0', () => {
+SERVER.listen(PORT, '127.0.0.1', () => {
     setRtspList();
     runMediaServer();
 	runProcesses();

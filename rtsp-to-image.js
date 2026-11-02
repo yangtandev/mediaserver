@@ -1,11 +1,12 @@
 const FS = require('fs-extra');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+const FFMPEG_PATH = '/usr/bin/ffmpeg';
+FFMPEG.setFfmpegPath(FFMPEG_PATH);
 
 function isQsvSupported() {
     try {
@@ -21,6 +22,21 @@ function isQsvSupported() {
 const IS_QSV_SUPPORTED = isQsvSupported();
 const IMAGE_COMMANDS = {};
 let CONFIG = {};
+const RTSP_TIMEOUT_US = '10000000';
+const RTSP_TIMEOUT_INPUT_OPTIONS = getRtspTimeoutInputOptions();
+
+function getRtspTimeoutInputOptions() {
+	try {
+		const help = execFileSync(FFMPEG_PATH, ['-hide_banner', '-h', 'demuxer=rtsp'], {
+			encoding: 'utf8',
+		});
+		if (help.includes('-stimeout')) return ['-stimeout', RTSP_TIMEOUT_US];
+		if (help.includes('-timeout')) return ['-timeout', RTSP_TIMEOUT_US];
+	} catch (error) {
+		console.warn('[WARN] Could not detect FFmpeg RTSP timeout option.');
+	}
+	return [];
+}
 
 function RTSPToImage(rtsp, type, useHwAccel = false) {
 	const ip = rtsp.split('@').pop();
@@ -43,6 +59,7 @@ function RTSPToImage(rtsp, type, useHwAccel = false) {
 		.addInputOption(
 			'-rtsp_transport',
 			'tcp',
+			...RTSP_TIMEOUT_INPUT_OPTIONS,
 			'-vsync',
 			'passthrough',
 			'-rtbufsize',

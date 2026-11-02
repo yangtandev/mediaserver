@@ -1,5 +1,12 @@
 # Release Notes
 
+## v2.0.0 - 2026-11-02
+
+- 修正 FFmpeg 4.4 的 RTSP timeout 選項判斷，避免誤進入監聽模式造成連線失敗。
+- 將 Node API 與 ZLMediaKit HTTP/HTTPS 限制為本機監聽，透過 Nginx HTTPS 提供網頁與媒體。
+- 封鎖對外 ZLMediaKit 管理 API、禁止 API 改寫 FFmpeg 命令，並移除 Node 對整個專案的靜態檔案服務。
+- 破壞性變更：3000、9080、9443 不再接受遠端直連；部署需套用 README 的 Nginx 規則及安全 runtime config，既有遠端管理 API 呼叫需改走本機管理流程。
+
 ## v1.1.4 - 2026-08-24
 
 - 改善 CCTV 主選單截圖更新，避免灰畫面或壞圖覆蓋既有封面。
