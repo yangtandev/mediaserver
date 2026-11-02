@@ -5,7 +5,7 @@ const { execFileSync, execSync } = require('child_process');
 const IMAGE_PATH = `./ZLMediaKit/release/linux/Debug/www/image`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-const FFMPEG_PATH = '/usr/bin/ffmpeg';
+const FFMPEG_PATH = '/usr/local/bin/ffmpeg';
 FFMPEG.setFfmpegPath(FFMPEG_PATH);
 
 function isQsvSupported() {
