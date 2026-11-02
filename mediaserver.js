@@ -13,7 +13,7 @@ const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const MEDIA_SERVER_PATH = './ZLMediaKit/release/linux/Debug/MediaServer';
 const CCTV_DATA_PATH = PATH.join(BACKUP_PATH, 'cctv', 'data');
 const FFMPEG = require('fluent-ffmpeg');
-const FFMPEG_PATH = '/usr/bin/ffmpeg';
+const FFMPEG_PATH = '/usr/local/bin/ffmpeg';
 FFMPEG.setFfmpegPath(FFMPEG_PATH);
 const { execFileSync, execSync } = require('child_process');
 
@@ -37,6 +37,9 @@ let CCTV_SNAP_COMMANDS = {};
 let CONFIG = {};
 let CONVERT_LIVE_STREAM_TO_MP4 = false;
 const RTSP_TIMEOUT_US = '10000000';
+const CCTV_SNAPSHOT_TIMEOUT_MS = 5000;
+const BASE_RETRY_DELAY_MS = 5000;
+const MAX_RETRY_DELAY_MS = 60000;
 const RTSP_TIMEOUT_INPUT_OPTIONS = getRtspTimeoutInputOptions();
 const CCTV_CLIENT_GROUPS = [
 	{ key: 'rtmpClientList', type: 'rtmp' },
@@ -92,7 +95,7 @@ function checkSnapshotQuality(imagePath) {
 	let raw;
 	try {
 		raw = execFileSync(
-			'/usr/bin/ffmpeg',
+			FFMPEG_PATH,
 			[
 				'-v',
 				'error',
@@ -100,6 +103,8 @@ function checkSnapshotQuality(imagePath) {
 				imagePath,
 				'-vf',
 				`scale=${width}:${height}:flags=area`,
+				'-frames:v',
+				'1',
 				'-f',
 				'rawvideo',
 				'-pix_fmt',
@@ -109,31 +114,89 @@ function checkSnapshotQuality(imagePath) {
 			{ maxBuffer: pixels * 3 + 1024 }
 		);
 	} catch (err) {
-		return { ok: false, reason: 'decode failed' };
+		if (err.stdout && err.stdout.length >= pixels * 3) {
+			raw = err.stdout;
+		} else {
+			return { ok: false, reason: 'decode failed' };
+		}
 	}
 
 	if (raw.length < pixels * 3) return { ok: false, reason: 'incomplete pixels' };
 
 	const gray = new Float32Array(pixels);
+	const artifactMask = new Uint8Array(pixels);
+	const noisyArtifactRows = new Uint16Array(height);
 	let sum = 0;
 	let sumSq = 0;
 	let chromaSum = 0;
-	let saturated = 0;
+	let greenPixels = 0;
+	let artifactPixels = 0;
 
 	for (let i = 0, p = 0; i < raw.length; i += 3, p += 1) {
 		const r = raw[i];
 		const g = raw[i + 1];
 		const b = raw[i + 2];
 		const y = (r + g + b) / 3;
+		const maxChannel = Math.max(r, g, b);
+		const minChannel = Math.min(r, g, b);
+		const spread = maxChannel - minChannel;
 		gray[p] = y;
 		sum += y;
 		sumSq += y * y;
 		chromaSum += Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
-		if (y < 4 || y > 251) saturated += 1;
+		if (g > 90 && g > r * 1.35 && g > b * 1.35) greenPixels += 1;
+		if (maxChannel > 115 && spread > 80) {
+			artifactPixels += 1;
+			artifactMask[p] = 1;
+		}
+	}
+
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			const p = y * width + x;
+			if (!artifactMask[p]) continue;
+			const i = p * 3;
+			let noisy = false;
+			if (x > 0) {
+				const left = i - 3;
+				noisy = noisy || Math.max(
+					Math.abs(raw[i] - raw[left]),
+					Math.abs(raw[i + 1] - raw[left + 1]),
+					Math.abs(raw[i + 2] - raw[left + 2])
+				) > 70;
+			}
+			if (y > 0) {
+				const up = i - width * 3;
+				noisy = noisy || Math.max(
+					Math.abs(raw[i] - raw[up]),
+					Math.abs(raw[i + 1] - raw[up + 1]),
+					Math.abs(raw[i + 2] - raw[up + 2])
+				) > 70;
+			}
+			if (noisy) noisyArtifactRows[y] += 1;
+		}
 	}
 
 	let edgeSum = 0;
 	let edgeCount = 0;
+	const regionStats = (fromY, toY) => {
+		let edge = 0;
+		let count = 0;
+		for (let y = fromY; y < toY; y += 1) {
+			for (let x = 0; x < width; x += 1) {
+				const index = y * width + x;
+				if (x > 0) {
+					edge += Math.abs(gray[index] - gray[index - 1]);
+					count += 1;
+				}
+				if (y > fromY) {
+					edge += Math.abs(gray[index] - gray[index - width]);
+					count += 1;
+				}
+			}
+		}
+		return { edge: count ? edge / count : 0 };
+	};
 	for (let y = 0; y < height; y += 1) {
 		for (let x = 0; x < width; x += 1) {
 			const index = y * width + x;
@@ -153,18 +216,25 @@ function checkSnapshotQuality(imagePath) {
 	const stddev = Math.sqrt(variance);
 	const edge = edgeSum / edgeCount;
 	const chroma = chromaSum / pixels;
-	const saturatedRatio = saturated / pixels;
+	const isMiddleBrightness = mean > 15 && mean < 240;
+	const middle = regionStats(Math.floor(height * 0.25), Math.floor(height * 0.75));
+	const bottom = regionStats(Math.floor(height * 0.8), height);
+	const greenRatio = greenPixels / pixels;
+	const artifactRatio = artifactPixels / pixels;
+	const badArtifactRows = Array.from(noisyArtifactRows).filter((count) => count / width > 0.35).length;
+	const artifactRowRatio = badArtifactRows / height;
 
-	if (mean < 6) return { ok: false, reason: `too dark (${mean.toFixed(1)})` };
-	if (mean > 249) return { ok: false, reason: `too bright (${mean.toFixed(1)})` };
-	if (stddev < 7 && edge < 3 && chroma < 12) {
+	if (greenRatio > 0.70) {
+		return { ok: false, reason: `green screen (green ${greenRatio.toFixed(3)})` };
+	}
+	if (artifactRatio > 0.12 && artifactRowRatio > 0.08) {
+		return { ok: false, reason: `decode artifacts (artifact ${artifactRatio.toFixed(3)}, rows ${artifactRowRatio.toFixed(3)})` };
+	}
+	if (isMiddleBrightness && stddev < 7 && edge < 3 && chroma < 12) {
 		return { ok: false, reason: `flat frame (stddev ${stddev.toFixed(1)}, edge ${edge.toFixed(1)})` };
 	}
-	if (saturatedRatio > 0.97) {
-		return { ok: false, reason: `mostly saturated (${Math.round(saturatedRatio * 100)}%)` };
-	}
-	if (stddev > 78 && edge > 85) {
-		return { ok: false, reason: `noisy frame (stddev ${stddev.toFixed(1)}, edge ${edge.toFixed(1)})` };
+	if (middle.edge > 8 && bottom.edge < 4 && bottom.edge < middle.edge * 0.35) {
+		return { ok: false, reason: `bad bottom band (bottom edge ${bottom.edge.toFixed(1)}, middle edge ${middle.edge.toFixed(1)})` };
 	}
 
 	return { ok: true };
@@ -195,6 +265,7 @@ function buildCctvCameras() {
 				const dir = PATH.join(CCTV_DATA_PATH, id);
 				const replayPath = PATH.join(dir, 'replay.mp4');
 				const coverPath = PATH.join(dir, 'cover.jpg');
+				const zlmRtspUrl = `rtsp://127.0.0.1:9554/live/${id}`;
 				const metaPath = PATH.join(dir, 'replay.json');
 				let replayMeta = null;
 
@@ -219,8 +290,8 @@ function buildCctvCameras() {
 					replayMeta,
 					recording: Boolean(CCTV_RECORD_COMMANDS[id]),
 					sourceUrl: url,
-					recordUrl: type === 'rtmp' ? url : `rtsp://127.0.0.1:9554/live/${id}`,
-					snapshotUrl: url,
+					recordUrl: zlmRtspUrl,
+					snapshotUrl: zlmRtspUrl,
 				});
 			});
 		});
@@ -260,6 +331,11 @@ function stopTrackedCommand(bucket, id, signal = 'SIGTERM') {
 	return true;
 }
 
+function getRetryDelay(retryCount) {
+	const delay = Math.min(MAX_RETRY_DELAY_MS, BASE_RETRY_DELAY_MS * Math.pow(2, retryCount - 1));
+	return delay + Math.floor(Math.random() * 3000);
+}
+
 /*
     Run ZLMediaKit MediaServer.
 */
@@ -293,7 +369,7 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 
 	const scheduleRetry = () => {
 		RTSP_RETRY_COUNTS[id] = (RTSP_RETRY_COUNTS[id] || 0) + 1;
-		const delay = Math.min(60000, 5000 * Math.pow(2, RTSP_RETRY_COUNTS[id] - 1));
+		const delay = getRetryDelay(RTSP_RETRY_COUNTS[id]);
 		setTimeout(() => {
 			console.log(`[INFO] Retrying RTSP-to-RTSP conversion for ${id} after ${delay}ms...`);
 			RTSPToRTSP(rtsp, type, streamKey);
@@ -314,10 +390,11 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 			'0:v:0',
 			'-dn',
 			'-rtsp_transport',
-			'tcp'
+			'tcp',
+			'-f',
+			'rtsp'
 		)
-		.output(output)
-		.outputFormat('rtsp');
+		.output(output);
 
 	if (type === 'hevc') {
 		command
@@ -346,11 +423,6 @@ function RTSPToRTSP(rtsp, type, streamKey) {
 				err.message
 			);
 			delete RTSP_COMMANDS[id];
-
-			if (err.message.includes('Invalid data found')) {
-				console.warn(`[WARN] RTSP-to-RTSP conversion for ${id} stopped. Stream data is incompatible with ${type}.`);
-				return;
-			}
 			
 			scheduleRetry();
 		});
@@ -693,7 +765,7 @@ APP.post('/cctv/cameras/:id/snapshot', (req, res) => {
 		if (FS.existsSync(tmpPath)) FS.rmSync(tmpPath, { force: true });
 		console.warn(`[WARN] CCTV snapshot timeout ${camera.id}`);
 		res.status(504).json(publicCamera(findCctvCamera(camera.id)));
-	}, 15000);
+	}, CCTV_SNAPSHOT_TIMEOUT_MS);
 
 	CCTV_SNAP_COMMANDS[camera.id] = { command };
 	command.save(tmpPath);
@@ -908,10 +980,12 @@ function cleanupAndExit() {
 	}
 
 	running_ids.forEach((id) => {
-		const cmd = all_processes[id];
+		const item = all_processes[id];
+		const cmd = item && item.command ? item.command : item;
 		if (cmd) {
 			console.log(`Stopping ffmpeg process for ${id}...`);
 			// 在 kill 之前，移除所有事件監聽器，避免觸發自動重試
+			if (item.watchdog) clearInterval(item.watchdog);
 			cmd.removeAllListeners();
 			cmd.kill('SIGTERM'); // 使用 SIGTERM 優雅地終止
 		}

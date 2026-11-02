@@ -3,7 +3,7 @@ const { execSync } = require('child_process');
 const TIME_LAPSE_PATH = `./ZLMediaKit/release/linux/Debug/www/time-lapse`;
 const CONFIG_PATH = `./ZLMediaKit/release/linux/Debug/www/config/config.json`;
 const FFMPEG = require('fluent-ffmpeg');
-FFMPEG.setFfmpegPath(`/usr/bin/ffmpeg`);
+FFMPEG.setFfmpegPath(`/usr/local/bin/ffmpeg`);
 
 function isQsvSupported() {
     try {

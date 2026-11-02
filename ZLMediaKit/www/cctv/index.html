@@ -119,6 +119,11 @@
 				width: 100%;
 				height: 100%;
 				object-fit: cover;
+				visibility: hidden;
+			}
+
+			.cover img.ready {
+				visibility: visible;
 			}
 
 			.placeholder {
@@ -316,8 +321,11 @@
 				location.protocol === 'https:'
 					? `${location.origin}/api/cctv`
 					: `http://${location.hostname || 'localhost'}:3000/cctv`;
+			const CAMERA_POLL_MS = 10000;
+			const SNAPSHOT_REFRESH_MS = 5 * 60 * 1000;
 			const SNAPSHOT_RETRY_MS = 60000;
-			const SNAPSHOT_WORKERS = 3;
+			const SNAPSHOT_STAGGER_MS = 1500;
+			const SNAPSHOT_ATTEMPT_TIMEOUT_MS = 8000;
 
 			const state = {
 				view: 'menu',
@@ -328,11 +336,14 @@
 				playerUrl: '',
 				recording: null,
 				timer: null,
+				cameraPollTimer: null,
 				lastRecordPoll: 0,
 				notice: '',
-				snapshotRetryTimer: null,
-				snapshotRefreshRunning: false,
-				snapshotFailedIds: new Set(),
+				snapshotTimers: new Map(),
+				snapshotRunningIds: new Set(),
+				snapshotTokens: new Map(),
+				snapshotTokenSeq: 0,
+				displayedCovers: new Map(),
 			};
 
 			function api(path, options = {}) {
@@ -347,6 +358,14 @@
 				});
 			}
 
+			function apiWithTimeout(path, options = {}, timeoutMs = SNAPSHOT_ATTEMPT_TIMEOUT_MS) {
+				const controller = new AbortController();
+				const timer = setTimeout(() => controller.abort(), timeoutMs);
+				return api(path, { ...options, signal: controller.signal }).finally(() =>
+					clearTimeout(timer),
+				);
+			}
+
 			function assetUrl(path) {
 				return path ? `/${path}` : '';
 			}
@@ -355,6 +374,36 @@
 				if (!path) return '';
 				const separator = path.includes('?') ? '&' : '?';
 				return `${assetUrl(path)}${separator}v=${encodeURIComponent(token || Date.now())}`;
+			}
+
+			function coverInfo(cam) {
+				if (!cam.cover?.path) return null;
+				return {
+					path: cam.cover.path,
+					token: `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`,
+				};
+			}
+
+			function preloadSnapshot(camera) {
+				const cover = camera.cover;
+				if (!cover) return Promise.reject(new Error('截圖不存在'));
+				const image = new Image();
+				return new Promise((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(new Error('截圖載入逾時'));
+					}, 15000);
+					image.onload = () => {
+						clearTimeout(timeout);
+						image.className = 'ready';
+						image.alt = camera.name;
+						resolve(image);
+					};
+					image.onerror = () => {
+						clearTimeout(timeout);
+						reject(new Error('截圖載入失敗'));
+					};
+					image.src = cacheUrl(cover.path, `${cover.updatedAt || ''}-${cover.size || ''}`);
+				});
 			}
 
 			function liveUrl(cam) {
@@ -418,11 +467,42 @@
 			}
 
 			async function loadCameras() {
-				state.cameras = await api('/cameras');
+				const previous = new Map(
+					state.cameras.map((cam) => [cam.id, cam.coverStatus]),
+				);
+				state.cameras = (await api('/cameras')).map((cam) => ({
+					...cam,
+					coverStatus: previous.get(cam.id) || cam.coverStatus || '',
+				}));
+				const currentIds = new Set(state.cameras.map((cam) => cam.id));
+				[...state.snapshotTimers.keys()].forEach((id) => {
+					if (!currentIds.has(id)) stopSnapshotTimer(id);
+				});
 				if (state.selected) {
 					state.selected =
 						state.cameras.find((cam) => cam.id === state.selected.id) || state.selected;
 				}
+				if (state.view === 'menu') {
+					const newIds = state.cameras
+						.filter((cam) => !previous.has(cam.id))
+						.map((cam) => cam.id);
+					markSnapshotsLoading(newIds);
+					refreshSnapshots(newIds);
+				}
+			}
+
+			function startCameraPoll() {
+				clearInterval(state.cameraPollTimer);
+				state.cameraPollTimer = setInterval(async () => {
+					if (state.view !== 'menu') return;
+					try {
+						await loadCameras();
+						render();
+					} catch (err) {
+						state.notice = err.message;
+						render();
+					}
+				}, CAMERA_POLL_MS);
 			}
 
 			function renderTopbar(title) {
@@ -440,29 +520,78 @@
 				`;
 			}
 
+			function renderCameraBadges(cam) {
+				const coverBadge =
+					cam.coverStatus === 'loading'
+						? `<span class="badge">更新中</span>`
+						: cam.coverStatus === 'offline'
+							? `<span class="badge warn">離線</span>`
+							: cam.coverStatus === 'failed'
+								? `<span class="badge warn">更新失敗</span>`
+								: '';
+				const replayBadge = cam.replay ? `<span class="badge ok">有回放</span>` : '';
+				return `${replayBadge}${coverBadge}`;
+			}
+
+			function updateCameraStatus(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				const card = document.getElementById(`camera-${id}`);
+				const badgeRow = card?.querySelector('.badge-row');
+				const placeholder = card?.querySelector('.cover > .placeholder');
+				if (cam && badgeRow) badgeRow.innerHTML = renderCameraBadges(cam);
+				if (cam && placeholder) placeholder.textContent = placeholderText(cam);
+			}
+
+			function replaceCameraCover(id, image) {
+				const cover = document.getElementById(`camera-${id}`)?.querySelector('.cover');
+				const current = cover?.querySelector('img, .placeholder');
+				if (current) current.replaceWith(image);
+			}
+
+			function markCoverReady(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam) return;
+				const info = coverInfo(cam);
+				if (info) state.displayedCovers.set(id, info);
+			}
+
+			function markCoverFailed(id) {
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam) return;
+				cam.coverStatus = 'failed';
+				updateCameraStatus(id);
+			}
+
+			function markCoverLoadFailed(id, element) {
+				if (state.displayedCovers.has(id)) return;
+				const cam = state.cameras.find((item) => item.id === id);
+				if (cam && element) {
+					element.outerHTML = `<div class="placeholder">${placeholderText(cam)}</div>`;
+				}
+			}
+
+			function placeholderText(cam) {
+				if (cam.coverStatus === 'loading') return '更新中';
+				if (cam.coverStatus === 'failed') return '更新失敗';
+				if (cam.coverStatus === 'offline') return '離線';
+				return '無封面';
+			}
+
 			function renderMenu() {
 				destroyPlayer();
 				const cards = state.cameras
 					.map((cam) => {
-						const cover = cam.cover
-							? `<img src="${cacheUrl(cam.cover.path, `${cam.cover.updatedAt || ''}-${cam.cover.size || ''}`)}" alt="${escapeHtml(cam.name)}">`
-							: `<div class="placeholder">無封面</div>`;
-						const coverBadge =
-							cam.coverStatus === 'loading'
-								? `<span class="badge">更新中</span>`
-								: cam.coverStatus === 'offline'
-									? `<span class="badge warn">離線</span>`
-									: cam.coverStatus === 'failed'
-										? `<span class="badge warn">更新失敗</span>`
-										: '';
-						const replayBadge = cam.replay ? `<span class="badge ok">有回放</span>` : '';
+						const info = state.displayedCovers.get(cam.id) || coverInfo(cam);
+						const badgeCam = cam;
+						const cover = info
+							? `<img class="ready" loading="lazy" decoding="async" src="${cacheUrl(info.path, info.token)}" alt="${escapeHtml(cam.name)}" onload="markCoverReady('${cam.id}')" onerror="markCoverLoadFailed('${cam.id}', this)">`
+							: `<div class="placeholder">${placeholderText(cam)}</div>`;
 						return `
-							<div class="camera-card" onclick="openCamera('${cam.id}')">
+							<div class="camera-card" id="camera-${cam.id}" onclick="openCamera('${cam.id}')">
 								<div class="cover">
 									${cover}
 									<div class="badge-row">
-										${replayBadge}
-										${coverBadge}
+										${renderCameraBadges(badgeCam)}
 									</div>
 								</div>
 								<div class="card-body">
@@ -617,7 +746,7 @@
 			}
 
 			function openCamera(id) {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				state.selected = state.cameras.find((cam) => cam.id === id);
 				state.notice = '';
 				if (!state.selected) return;
@@ -639,17 +768,18 @@
 				state.mode = 'live';
 				state.recording = null;
 				state.notice = '';
+				markSnapshotsLoading();
 				render();
 				refreshSnapshots();
 			}
 
 			function openConfig() {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				window.location.href = '../config/';
 			}
 
 			function startLive() {
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				clearInterval(state.timer);
 				state.view = 'player';
 				state.mode = 'live';
@@ -664,7 +794,7 @@
 					render();
 					return;
 				}
-				stopSnapshotRetry();
+				stopSnapshotTimers();
 				clearInterval(state.timer);
 				state.view = 'player';
 				state.mode = 'replay';
@@ -846,77 +976,139 @@
 				}
 			}
 
-			function stopSnapshotRetry() {
-				clearTimeout(state.snapshotRetryTimer);
-				state.snapshotRetryTimer = null;
+			function stopSnapshotTimer(id) {
+				const timer = state.snapshotTimers.get(id);
+				if (timer) clearTimeout(timer);
+				state.snapshotTimers.delete(id);
 			}
 
-			function scheduleSnapshotRetry() {
-				stopSnapshotRetry();
-				if (state.view !== 'menu' || state.snapshotFailedIds.size === 0) return;
-				state.snapshotRetryTimer = setTimeout(() => {
-					refreshSnapshots([...state.snapshotFailedIds]);
-				}, SNAPSHOT_RETRY_MS);
+			function stopSnapshotTimers() {
+				state.snapshotTimers.forEach((timer) => clearTimeout(timer));
+				state.snapshotTimers.clear();
+				state.snapshotTokens.clear();
+				state.snapshotRunningIds.clear();
 			}
 
-			function markSnapshotFailed(cam) {
-				state.snapshotFailedIds.add(cam.id);
-				cam.coverStatus = cam.cover ? 'failed' : 'offline';
+			function scheduleSnapshot(id, delay) {
+				stopSnapshotTimer(id);
+				if (state.view !== 'menu') return;
+				state.snapshotTimers.set(
+					id,
+					setTimeout(() => refreshSnapshot(id), delay),
+				);
 			}
 
-			async function refreshSnapshots(ids = null) {
-				if (state.snapshotRefreshRunning) return;
-				stopSnapshotRetry();
+			function markSnapshotsLoading(ids = null) {
 				const requested = ids
 					? ids.map((id) => state.cameras.find((cam) => cam.id === id)).filter(Boolean)
 					: [...state.cameras];
-				const queue = [...requested];
-				if (queue.length === 0) {
-					scheduleSnapshotRetry();
-					return;
-				}
-				state.snapshotRefreshRunning = true;
-				const worker = async () => {
-					while (state.view === 'menu' && queue.length) {
-						const cam = queue.shift();
+				requested.forEach((cam) => {
+					if (!state.snapshotRunningIds.has(cam.id)) {
 						cam.coverStatus = 'loading';
-						if (state.view === 'menu') render();
-						try {
-							const updated = await api(`/cameras/${cam.id}/snapshot`, { method: 'POST' });
-							if (updated.__status === 202) {
-								queue.push(cam);
-								await sleep(1200);
-							} else {
-								const { __status, snapshotUpdated, ...camera } = updated;
-								if (snapshotUpdated === false) {
-									mergeCamera({ ...camera, coverStatus: camera.cover ? 'failed' : 'offline' });
-									state.snapshotFailedIds.add(cam.id);
-								} else {
-									mergeCamera({ ...camera, coverStatus: '' });
-									state.snapshotFailedIds.delete(cam.id);
-								}
-							}
-						} catch (err) {
-							markSnapshotFailed(cam);
-						}
-						if (state.view === 'menu') render();
+						updateCameraStatus(cam.id);
 					}
-				};
+				});
+			}
 
-				const workers = Array.from({ length: Math.min(SNAPSHOT_WORKERS, queue.length) }, () => worker());
+			function isPrivateCamera(cam) {
+				const host = String(cam.ip || '').split(':')[0];
+				return (
+					host === 'localhost' ||
+					host === '127.0.0.1' ||
+					host.startsWith('10.') ||
+					host.startsWith('192.168.') ||
+					/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+				);
+			}
+
+			async function refreshSnapshot(id) {
+				if (state.snapshotRunningIds.has(id)) return;
+				stopSnapshotTimer(id);
+				const cam = state.cameras.find((item) => item.id === id);
+				if (!cam || state.view !== 'menu') return;
+
+				const token = state.snapshotTokenSeq + 1;
+				state.snapshotTokenSeq = token;
+				state.snapshotTokens.set(id, token);
+				const isCurrent = () => state.snapshotTokens.get(id) === token;
+				const visibleCover = state.displayedCovers.get(id) || coverInfo(cam);
+				const previousStatus = cam.coverStatus;
+				cam.coverStatus = 'loading';
+				if (state.view === 'menu') updateCameraStatus(cam.id);
+				state.snapshotRunningIds.add(id);
+				const startedAt = Date.now();
+
 				try {
-					await Promise.all(workers);
+					while (state.view === 'menu' && isCurrent()) {
+						const elapsed = Date.now() - startedAt;
+						if (elapsed >= SNAPSHOT_ATTEMPT_TIMEOUT_MS) {
+							throw new Error('截圖更新逾時');
+						}
+						const updated = await apiWithTimeout(
+							`/cameras/${cam.id}/snapshot`,
+							{ method: 'POST' },
+							SNAPSHOT_ATTEMPT_TIMEOUT_MS - elapsed,
+						);
+						if (updated.__status === 202) {
+							await sleep(1200);
+							continue;
+						}
+
+						const { __status, snapshotUpdated, ...camera } = updated;
+						if (!isCurrent()) return;
+						if (snapshotUpdated === false) {
+							mergeCamera({ ...camera, coverStatus: 'failed' });
+							scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+						} else {
+							const nextCover = coverInfo(camera);
+							if (visibleCover && nextCover?.token === visibleCover.token) {
+								mergeCamera({ ...camera, coverStatus: 'failed' });
+								scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+								if (state.view === 'menu') updateCameraStatus(cam.id);
+								return;
+							}
+							const image = await preloadSnapshot(camera);
+							if (!isCurrent()) return;
+							mergeCamera({ ...camera, coverStatus: '' });
+							if (nextCover) state.displayedCovers.set(cam.id, nextCover);
+							replaceCameraCover(cam.id, image);
+							scheduleSnapshot(cam.id, SNAPSHOT_REFRESH_MS);
+						}
+						if (state.view === 'menu') updateCameraStatus(cam.id);
+						return;
+					}
+					if (!isCurrent()) return;
+					cam.coverStatus = previousStatus || '';
+				} catch (err) {
+					if (!isCurrent()) return;
+					mergeCamera({ ...cam, coverStatus: 'failed' });
+					scheduleSnapshot(cam.id, SNAPSHOT_RETRY_MS);
+					if (state.view === 'menu') updateCameraStatus(cam.id);
 				} finally {
-					state.snapshotRefreshRunning = false;
-					scheduleSnapshotRetry();
+					if (isCurrent()) state.snapshotRunningIds.delete(id);
 				}
+			}
+
+			function refreshSnapshots(ids = null) {
+				const requested = ids
+				? ids.map((id) => state.cameras.find((cam) => cam.id === id)).filter(Boolean)
+					: [...state.cameras];
+				markSnapshotsLoading(requested.map((cam) => cam.id));
+				requested
+					.sort((a, b) => Number(isPrivateCamera(b)) - Number(isPrivateCamera(a)))
+					.forEach((cam, index) => {
+					if (index === 0) refreshSnapshot(cam.id);
+					else scheduleSnapshot(cam.id, index * SNAPSHOT_STAGGER_MS);
+				});
 			}
 
 			(async function init() {
 				try {
 					await loadCameras();
+					markSnapshotsLoading();
 					render();
-					refreshSnapshots();
+					startCameraPoll();
+					requestAnimationFrame(() => refreshSnapshots());
 				} catch (err) {
 					state.notice = err.message;
 					render();
@@ -933,6 +1125,9 @@
 			window.startRecording = startRecording;
 			window.stopRecording = stopRecording;
 			window.deleteReplay = deleteReplay;
+			window.markCoverReady = markCoverReady;
+			window.markCoverFailed = markCoverFailed;
+			window.markCoverLoadFailed = markCoverLoadFailed;
 		</script>
 	</body>
 </html>
